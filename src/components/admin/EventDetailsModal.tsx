@@ -31,6 +31,7 @@ interface Event {
   capacity: number;
   price?: number;
   currency?: string;
+  external_link?: string;
   is_cancelled: boolean;
   created_at: string;
   community_id: string;

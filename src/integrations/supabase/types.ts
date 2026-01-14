@@ -429,6 +429,7 @@ export type Database = {
           currency: string | null
           date_time: string | null
           description: string | null
+          external_link: string | null
           host_id: string | null
           id: string
           image_url: string | null
@@ -445,6 +446,7 @@ export type Database = {
           currency?: string | null
           date_time?: string | null
           description?: string | null
+          external_link?: string | null
           host_id?: string | null
           id?: string
           image_url?: string | null
@@ -461,6 +463,7 @@ export type Database = {
           currency?: string | null
           date_time?: string | null
           description?: string | null
+          external_link?: string | null
           host_id?: string | null
           id?: string
           image_url?: string | null

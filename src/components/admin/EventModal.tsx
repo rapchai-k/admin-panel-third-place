@@ -25,6 +25,7 @@ const eventSchema = z.object({
   capacity: z.number().min(1, 'Capacity must be at least 1').max(10000, 'Capacity must be less than 10,000'),
   price: z.number().min(0, 'Price cannot be negative').optional(),
   image_url: z.string().optional(),
+  external_link: z.string().url('External link must be a valid URL').optional(),
   community_id: z.string().min(1, 'Community is required'),
   host_id: z.string().optional(),
 });
@@ -40,6 +41,7 @@ interface Event {
   capacity: number;
   price?: number;
   image_url?: string;
+  external_link?: string;
   community_id: string;
   host_id?: string;
   is_cancelled?: boolean;
@@ -79,6 +81,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
       capacity: event?.capacity || 50,
       price: event?.price || 0,
       image_url: event?.image_url || '',
+      external_link: event?.external_link || '',
       community_id: event?.community_id || '',
       host_id: event?.host_id || '',
     },
@@ -97,6 +100,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
         capacity: event?.capacity || 50,
         price: event?.price || 0,
         image_url: event?.image_url || '',
+        external_link: event?.external_link || '',
         community_id: event?.community_id || '',
         host_id: event?.host_id || '',
       });
@@ -182,6 +186,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
             capacity: eventData.capacity,
             price: eventData.price,
             image_url: eventData.image_url || null,
+            external_link: eventData.external_link || null,
             community_id: eventData.community_id,
             host_id: eventData.host_id,
           }]);
@@ -396,6 +401,24 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
                       onUpload={field.onChange}
                       currentImage={field.value}
                       label="Event Image"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="external_link"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>External Registration Link (Optional)</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="https://bookmyshow.com/... or https://ticketmaster.com/..."
+                      type="url"
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />

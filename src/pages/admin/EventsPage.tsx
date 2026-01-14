@@ -21,6 +21,7 @@ interface Event {
   price?: number;
   currency?: string;
   image_url?: string;
+  external_link?: string;
   community_id: string;
   host_id?: string;
   is_cancelled: boolean;
