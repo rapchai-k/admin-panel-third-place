@@ -14,6 +14,7 @@ interface Registration {
   payment_session_id?: string;
   created_at: string;
   updated_at: string;
+  user_id: string;
   event: {
     title: string;
     date_time: string | null;
@@ -28,6 +29,7 @@ interface Registration {
   user: {
     name: string;
     photo_url?: string;
+    email?: string;
   };
   payment_session?: {
     id: string;
@@ -210,7 +212,25 @@ export default function RegistrationsPage() {
 
       if (error) throw error;
 
-      setRegistrations(registrationsData || []);
+      // Fetch emails for all users
+      const registrationsWithEmails = await Promise.all(
+        (registrationsData || []).map(async (reg) => {
+          // Fetch email from auth.users using RPC function
+          const { data: email } = await supabase.rpc('get_user_email', {
+            _user_id: reg.user_id
+          });
+
+          return {
+            ...reg,
+            user: {
+              ...reg.user,
+              email: email || undefined,
+            },
+          };
+        })
+      );
+
+      setRegistrations(registrationsWithEmails);
     } catch (error) {
       console.error('Error loading registrations:', error);
       toast({
@@ -277,7 +297,7 @@ export default function RegistrationsPage() {
       id: registration.id,
       user: {
         name: registration.user.name,
-        email: `user@example.com`, // Placeholder since email doesn't exist in users table
+        email: registration.user.email || `user${registration.user_id.slice(0, 8)}@example.com`, // Use actual email or fallback
         phone: undefined,
         photo_url: registration.user.photo_url,
       },

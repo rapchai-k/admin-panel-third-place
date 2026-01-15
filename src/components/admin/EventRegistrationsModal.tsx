@@ -109,39 +109,48 @@ export function EventRegistrationsModal({
 
       console.log('Raw registration data:', data);
 
-      const transformedData: Registration[] = data?.map(reg => {
-        console.log('Processing registration:', {
-          id: reg.id,
-          payment_session_id: reg.payment_session_id,
-          payment_session: reg.payment_session,
-          event_price: reg.event?.price
-        });
-        return {
-        id: reg.id,
-        user: {
-          ...reg.user,
-          email: `user${reg.user_id.slice(0, 8)}@example.com`, // Placeholder email
-          phone: undefined,
-        },
-        event: reg.event,
-        status: reg.status,
-        payment_session: reg.payment_session ? {
-          id: reg.payment_session.id,
-          payment_status: reg.payment_session.payment_status,
-          amount: reg.payment_session.amount,
-          currency: reg.payment_session.currency,
-          expires_at: reg.payment_session.expires_at,
-          cashfree_order_id: reg.payment_session.cashfree_order_id,
-          cashfree_payment_id: reg.payment_session.cashfree_payment_id,
-        } : null,
-        registered_at: reg.created_at,
-        special_requests: undefined,
-        dietary_preferences: undefined,
-        emergency_contact: undefined,
-      };
-      }) || [];
+      // Fetch emails for all users
+      const registrationsWithEmails = await Promise.all(
+        (data || []).map(async (reg) => {
+          console.log('Processing registration:', {
+            id: reg.id,
+            payment_session_id: reg.payment_session_id,
+            payment_session: reg.payment_session,
+            event_price: reg.event?.price
+          });
 
-      setRegistrations(transformedData);
+          // Fetch email from auth.users using RPC function
+          const { data: email } = await supabase.rpc('get_user_email', {
+            _user_id: reg.user_id
+          });
+
+          return {
+            id: reg.id,
+            user: {
+              ...reg.user,
+              email: email || `user${reg.user_id.slice(0, 8)}@example.com`, // Fallback to placeholder if email fetch fails
+              phone: undefined,
+            },
+            event: reg.event,
+            status: reg.status,
+            payment_session: reg.payment_session ? {
+              id: reg.payment_session.id,
+              payment_status: reg.payment_session.payment_status,
+              amount: reg.payment_session.amount,
+              currency: reg.payment_session.currency,
+              expires_at: reg.payment_session.expires_at,
+              cashfree_order_id: reg.payment_session.cashfree_order_id,
+              cashfree_payment_id: reg.payment_session.cashfree_payment_id,
+            } : null,
+            registered_at: reg.created_at,
+            special_requests: undefined,
+            dietary_preferences: undefined,
+            emergency_contact: undefined,
+          };
+        })
+      );
+
+      setRegistrations(registrationsWithEmails);
     } catch (error) {
       console.error('Error loading registrations:', error);
       toast({
