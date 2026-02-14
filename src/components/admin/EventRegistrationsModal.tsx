@@ -43,8 +43,8 @@ interface Registration {
     amount: number;
     currency: string;
     expires_at: string;
-    cashfree_order_id?: string | null;
-    cashfree_payment_id?: string | null;
+    razorpay_payment_link_id?: string | null;
+    razorpay_payment_id?: string | null;
   } | null;
   registered_at: string;
   special_requests?: string;
@@ -98,8 +98,8 @@ export function EventRegistrationsModal({
             amount,
             currency,
             expires_at,
-            cashfree_order_id,
-            cashfree_payment_id
+            razorpay_payment_link_id,
+            razorpay_payment_id
           )
         `)
         .eq('event_id', eventId)
@@ -139,8 +139,8 @@ export function EventRegistrationsModal({
               amount: reg.payment_session.amount,
               currency: reg.payment_session.currency,
               expires_at: reg.payment_session.expires_at,
-              cashfree_order_id: reg.payment_session.cashfree_order_id,
-              cashfree_payment_id: reg.payment_session.cashfree_payment_id,
+              razorpay_payment_link_id: reg.payment_session.razorpay_payment_link_id,
+              razorpay_payment_id: reg.payment_session.razorpay_payment_id,
             } : null,
             registered_at: reg.created_at,
             special_requests: undefined,

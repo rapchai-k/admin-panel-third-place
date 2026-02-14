@@ -1,0 +1,264 @@
+# MyThirdPlace Consumer Panel - Platform Capabilities Overview
+
+## 🎯 Platform Purpose
+The MyThirdPlace Consumer Panel is a mobile-first community platform that helps people in metro cities discover communities and join events, reducing urban loneliness. It provides a comprehensive social experience for users to find their "third place" - essential social spaces beyond home and work where communities thrive.
+
+## 🏗️ Technology Stack
+- **Frontend**: React 18 + TypeScript + Next.js 15 (migrating from Vite) + Tailwind CSS + Shadcn/ui
+- **Build System**: Next.js with Turbopack (primary) + Vite (legacy support)
+- **Routing**: React Router (current) → Next.js App Router (migration target)
+- **Backend**: Supabase (Database, Auth, Storage, Real-time)
+- **State Management**: React Query for server state
+- **Testing**: Vitest + React Testing Library + Playwright
+
+## 📊 Database Schema & Shared Resources
+
+### Core Tables (Shared with Admin Panel)
+- **`users`** - User profiles with role-based access, referral tracking
+- **`communities`** - Community discovery with location-based organization
+- **`events`** - Event browsing, registration, and payment tracking
+- **`discussions`** - Time-bound community discussions with member-only access
+- **`event_registrations`** - User event registrations with payment integration
+- **`community_members`** - Community membership tracking
+- **`flags`** - Content moderation system for user reports
+- **`user_activity_log`** - Comprehensive user action tracking
+- **`payment_sessions`** - Payment processing and tracking
+- **`email_logs`** - Email delivery tracking and idempotency
+
+### Storage Buckets (Shared)
+- **`community-images`** - Community branding and media
+- **`event-images`** - Event promotional materials
+- **`user-avatars`** - User profile images
+
+## 🔐 Security & Access Control
+
+### User Roles in Consumer Panel
+- **User** - Standard community member (browse, join, participate)
+- **Host** - Event host with special badge (one per event)
+- **Community Member** - Access to community-specific discussions
+
+### Row Level Security (RLS) Policies
+- All database operations respect user authentication context
+- Community membership required for discussion access
+- Users can only modify their own profiles and content
+- Payment data is strictly user-scoped
+- Activity logging captures all user actions
+
+### Authentication Flow
+- Google OAuth integration via Supabase Auth
+- Automatic profile creation on first login
+- Session management with protected routes
+- Welcome email system with delivery tracking
+
+## 🎛️ Consumer Panel Capabilities
+
+### 1. Community Discovery & Management
+- **Browse Communities** - Location-based discovery with city filtering
+- **Join/Leave Communities** - One-click membership management
+- **Community Profiles** - Detailed community information with member counts
+- **Member Directory** - View community members (privacy-respecting)
+- **Community Analytics** - Member growth and activity visibility
+
+### 2. Event Discovery & Registration
+- **Event Browsing** - Featured events with registration counts
+- **Event Details** - Comprehensive event information with media
+- **Registration System** - Free and paid event registration
+- **Payment Integration** - Cashfree payment processing
+- **Registration Management** - View and cancel registrations
+- **Host Recognition** - Special badges for event hosts
+
+### 3. Discussion Participation
+- **Community Discussions** - Member-only threaded discussions
+- **Time-bound Threads** - Auto-expiring discussions
+- **Comment System** - Nested comments with moderation
+- **Content Flagging** - Report inappropriate content with detailed reasons
+- **Discussion History** - Access to past discussions
+
+### 4. User Profile & Preferences
+- **Profile Management** - Name, photo, and preferences
+- **Referral System** - Generate and track referral codes
+- **Activity Dashboard** - Personal activity and engagement history
+- **Notification Preferences** - Email, WhatsApp, SMS settings
+- **Badge System** - Achievement and role badges
+
+### 5. Payment & Financial Features
+- **Event Payments** - Secure payment processing via Cashfree
+- **Payment History** - Complete transaction history
+- **Payment Status Tracking** - Real-time payment verification
+- **Registration Receipts** - Payment confirmation and receipts
+
+### 6. Real-time Features
+- **Live Updates** - Real-time discussion updates
+- **Activity Feeds** - Live community and event activity
+- **Notification System** - Real-time alerts and updates
+- **Auto-refresh** - Dynamic content updates
+
+## 🔄 Database Integration Patterns
+
+### Read Operations
+- **Community Discovery**: Query `communities` with member counts
+- **Event Browsing**: Query `events` with registration counts and community info
+- **Discussion Access**: Query `discussions` with membership validation
+- **User Profiles**: Query `users` with activity and badge data
+
+### Write Operations
+- **Community Membership**: Insert/delete in `community_members`
+- **Event Registration**: Insert in `event_registrations` with payment tracking
+- **Discussion Participation**: Insert in `discussion_comments` with validation
+- **Content Flagging**: Insert in `flags` with detailed reporting
+- **Activity Logging**: Automatic logging in `user_activity_log`
+
+### Payment Flow Integration
+1. **Payment Initiation**: Create `payment_sessions` via Edge Function
+2. **Payment Processing**: Cashfree webhook updates registration status
+3. **Registration Creation**: Successful payments create `event_registrations`
+4. **Activity Logging**: All payment actions logged for audit
+
+## 📧 Email & Communication System
+
+### Welcome Email Flow
+- **Trigger**: New user registration via Google OAuth
+- **Template System**: Configurable HTML templates with variables
+- **Delivery Tracking**: Complete email logs with delivery status
+- **Idempotency**: Prevents duplicate welcome emails
+
+### Email Infrastructure
+- **Edge Functions**: `welcome-email-trigger`, `send-email`
+- **Provider**: Resend integration for reliable delivery
+- **Templates**: Dynamic variable substitution
+- **Logging**: Comprehensive delivery and error tracking
+
+## 🔗 Webhook & Integration System
+
+### Webhook Events (Infrastructure Ready)
+- **User Actions**: Registration, community joins, event registrations
+- **Payment Events**: Payment success/failure, registration updates
+- **Discussion Events**: Comments, flags, thread expiration
+- **System Events**: User bans, content moderation
+
+### Integration Capabilities
+- **n8n Compatible**: Webhook format designed for workflow automation
+- **Batch Processing**: Efficient webhook delivery with retry logic
+- **HMAC Signatures**: Secure webhook verification
+- **Event Queuing**: Reliable delivery with failure handling
+
+## 🎨 User Experience & Design
+
+### Mobile-First Design
+- **Responsive Layout**: Optimized for mobile devices
+- **Touch Interactions**: Gesture-friendly interface
+- **Progressive Enhancement**: Works across all device types
+- **Accessibility**: WCAG 2.1 AA compliance
+
+### Key UI Components
+- **TiltedCard**: Interactive community and event previews
+- **SpotlightCard**: Feature highlighting with animations
+- **Navigation**: Bottom tab bar (mobile) + side navigation (desktop)
+- **Error Handling**: Graceful degradation with retry options
+- **Loading States**: Skeleton loaders and progress indicators
+
+### Theme System
+- **Dark/Light Mode**: System-aware theme switching
+- **Design Tokens**: Consistent colors, fonts, and spacing
+- **Brand Identity**: DM Sans font with bold but friendly aesthetic
+
+## 🧪 Testing & Quality Assurance
+
+### Test Coverage
+- **Unit Tests**: Component and utility function testing
+- **Integration Tests**: API and database operation testing
+- **E2E Tests**: Complete user journey validation
+- **Agent Testing**: AI-driven functionality validation
+
+### Quality Standards
+- **TypeScript**: Full type safety across the application
+- **ESLint/Prettier**: Code quality and formatting standards
+- **Test Requirements**: All features require test coverage
+- **Performance**: Optimized queries and caching strategies
+
+## 🚀 Current Implementation Status
+
+### ✅ Completed Features
+- **Authentication System** - Google OAuth with profile management
+- **Community Discovery** - Browse, join, and manage communities
+- **Event System** - Browse, register, and manage event participation
+- **Discussion Platform** - Member-only discussions with moderation
+- **Payment Integration** - Cashfree payment processing
+- **Email System** - Welcome emails with delivery tracking
+- **Content Moderation** - Flag system with detailed reporting
+- **Referral System** - Code-based user referrals
+- **Activity Logging** - Comprehensive user action tracking
+
+### 🟡 In Progress
+- **Webhook System** - Infrastructure complete, event wiring in progress
+- **Analytics Integration** - User-facing analytics dashboard
+- **Advanced Notifications** - Multi-channel notification system
+
+### 📋 Planned Enhancements
+- **Push Notifications** - Mobile app notifications
+- **Advanced Search** - Enhanced discovery capabilities
+- **Social Features** - User connections and networking
+- **Gamification** - Achievement and reward systems
+
+## 🔧 Integration Points for Admin Panel
+
+### Shared Database Operations
+1. **User Management** - Admin panel manages user roles and permissions
+2. **Community Moderation** - Admin oversight of community content
+3. **Event Oversight** - Admin management of event lifecycle
+4. **Content Moderation** - Admin resolution of flagged content
+5. **Analytics Data** - Shared metrics and reporting data
+
+### Data Flow Patterns
+- **User Actions** → Consumer Panel → Database → Admin Analytics
+- **Moderation Flags** → Consumer Panel → Database → Admin Review
+- **Payment Events** → Consumer Panel → Database → Admin Revenue Tracking
+- **Activity Logs** → Consumer Panel → Database → Admin Audit Trails
+
+### API Considerations
+- **RLS Policies** - Respect user context in all operations
+- **Permission Checks** - Validate user permissions before actions
+- **Activity Logging** - Log all user actions for admin visibility
+- **Real-time Updates** - Sync changes between panels
+
+## 📊 Key Metrics Generated for Admin Panel
+
+### User Engagement
+- Community joins/leaves per user
+- Event registrations and attendance
+- Discussion participation rates
+- Content flagging patterns
+
+### Platform Growth
+- New user registrations
+- Community creation and growth
+- Event creation and success rates
+- Revenue from paid events
+
+### Content Moderation
+- Flag reports and resolution
+- User behavior patterns
+- Community health metrics
+- Discussion activity levels
+
+## 📝 Development Notes
+
+### Database Schema Stability
+- Schema is production-ready and stable
+- All tables have proper RLS policies
+- Comprehensive audit trails implemented
+- Payment system fully integrated
+
+### Security Considerations
+- All user data is properly scoped
+- Payment information is encrypted
+- Activity logging captures security events
+- Content moderation prevents abuse
+
+### Performance Optimizations
+- React Query for efficient data fetching
+- Optimized database queries with proper indexing
+- Image optimization and lazy loading
+- Caching strategies for frequently accessed data
+
+This consumer panel provides a complete user experience while generating comprehensive data for admin panel oversight and analytics. The shared database architecture ensures consistency and enables powerful administrative capabilities while maintaining user privacy and security.

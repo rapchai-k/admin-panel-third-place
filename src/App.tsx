@@ -22,6 +22,7 @@ import UsersPage from "@/pages/admin/UsersPage";
 import DiscussionsPage from "@/pages/admin/DiscussionsPage";
 import DiscussionDetailsPage from "@/pages/admin/DiscussionDetailsPage";
 import RegistrationsPage from "@/pages/admin/RegistrationsPage";
+import PaymentsPage from "@/pages/admin/PaymentsPage";
 import ModerationPage from "@/pages/admin/ModerationPage";
 import AnalyticsPage from "@/pages/admin/AnalyticsPage";
 import AdvancedUserManagementPage from "@/pages/admin/AdvancedUserManagementPage";
@@ -63,6 +64,7 @@ const App = () => (
                     <Route path="discussions" element={<DiscussionsPage />} />
                     <Route path="discussions/:id" element={<DiscussionDetailsPage />} />
                     <Route path="registrations" element={<RegistrationsPage />} />
+                    <Route path="payments" element={<PaymentsPage />} />
                     <Route path="moderation" element={<ModerationPage />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route path="advanced-users" element={<AdvancedUserManagementPage />} />

@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Download, Calendar, CreditCard, Clock, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useCurrency } from '@/context/CurrencyProvider';
 import { RegistrationDetailsModal } from '@/components/admin/RegistrationDetailsModal';
 
 interface Registration {
@@ -37,9 +39,12 @@ interface Registration {
     amount: number;
     currency: string;
     expires_at: string;
-    cashfree_order_id?: string | null;
-    cashfree_payment_id?: string | null;
+    razorpay_payment_link_id?: string | null;
+    razorpay_payment_id?: string | null;
+    gateway?: string | null;
+    updated_at?: string | null;
   } | null;
+  payment_display_status: string;
 }
 
 const columns: Column<Registration>[] = [
@@ -176,6 +181,7 @@ export default function RegistrationsPage() {
   const [selectedRegistration, setSelectedRegistration] = useState<any>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const { toast } = useToast();
+  const { formatCurrency } = useCurrency();
 
   useEffect(() => {
     loadRegistrations();
@@ -204,8 +210,10 @@ export default function RegistrationsPage() {
             amount,
             currency,
             expires_at,
-            cashfree_order_id,
-            cashfree_payment_id
+            razorpay_payment_link_id,
+            razorpay_payment_id,
+            gateway,
+            updated_at
           )
         `)
         .order('created_at', { ascending: false });
@@ -220,12 +228,29 @@ export default function RegistrationsPage() {
             _user_id: reg.user_id
           });
 
+          // Compute payment display status for filtering
+          let paymentDisplayStatus = 'free';
+          const eventPrice = reg.event?.price || 0;
+          if (eventPrice > 0) {
+            if (!reg.payment_session) {
+              paymentDisplayStatus = 'pending';
+            } else if (reg.payment_session.payment_status === 'paid') {
+              paymentDisplayStatus = 'paid';
+            } else if (reg.payment_session.payment_status === 'yet_to_pay') {
+              paymentDisplayStatus = new Date(reg.payment_session.expires_at) < new Date()
+                ? 'expired' : 'yet_to_pay';
+            } else {
+              paymentDisplayStatus = reg.payment_session.payment_status || 'unknown';
+            }
+          }
+
           return {
             ...reg,
             user: {
               ...reg.user,
               email: email || undefined,
             },
+            payment_display_status: paymentDisplayStatus,
           };
         })
       );
@@ -259,23 +284,69 @@ export default function RegistrationsPage() {
   };
 
   const handleExport = () => {
-    toast({
-      title: "Export Registrations",
-      description: "Export functionality coming soon!",
-    });
+    if (registrations.length === 0) {
+      toast({ title: "No Data", description: "No registrations to export." });
+      return;
+    }
+
+    const csvHeaders = [
+      'User Name', 'User Email', 'Event', 'Event Date', 'Community',
+      'Registration Status', 'Payment Status', 'Amount', 'Currency',
+      'Razorpay Payment ID', 'Gateway', 'Registered At'
+    ];
+
+    const escapeCsv = (val: unknown): string => {
+      const str = val == null ? '' : String(val);
+      return `"${str.replace(/"/g, '""').replace(/[\r\n]+/g, ' ')}"`;
+    };
+
+    const csvRows = registrations.map(r => [
+        escapeCsv(r.user?.name),
+        escapeCsv(r.user?.email),
+        escapeCsv(r.event?.title),
+        escapeCsv(r.event?.date_time ? new Date(r.event.date_time).toLocaleString() : ''),
+        escapeCsv(r.event?.community?.name),
+        escapeCsv(r.status),
+        escapeCsv(r.payment_display_status),
+        escapeCsv(r.payment_session?.amount ?? 0),
+        escapeCsv(r.payment_session?.currency || r.event?.currency || 'INR'),
+        escapeCsv(r.payment_session?.razorpay_payment_id),
+        escapeCsv(r.payment_session?.gateway),
+        escapeCsv(new Date(r.created_at).toLocaleString()),
+      ].join(',')
+    );
+
+    const csvContent = [csvHeaders.join(','), ...csvRows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `registrations_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({ title: "Export Complete", description: `Exported ${registrations.length} registrations.` });
   };
 
-  // Get unique events and statuses for filtering
+  // Get unique events for filtering
   const events = [...new Set(registrations.map(r => r.event.title))].map(title => ({
     value: title,
     label: title,
   }));
 
   const statuses = [
+    { value: 'registered', label: 'Registered' },
+    { value: 'unregistered', label: 'Unregistered' },
+  ];
+
+  const paymentStatuses = [
+    { value: 'paid', label: 'Paid' },
+    { value: 'yet_to_pay', label: 'Yet to Pay' },
+    { value: 'expired', label: 'Expired' },
+    { value: 'free', label: 'Free' },
     { value: 'pending', label: 'Pending' },
-    { value: 'success', label: 'Success' },
-    { value: 'failed', label: 'Failed' },
-    { value: 'cancelled', label: 'Cancelled' },
   ];
 
   const filters = [
@@ -289,7 +360,31 @@ export default function RegistrationsPage() {
       label: 'Status',
       options: statuses,
     },
+    {
+      key: 'payment_display_status' as keyof Registration,
+      label: 'Payment',
+      options: paymentStatuses,
+    },
   ];
+
+  // Payment summary stats
+  const paymentSummary = useMemo(() => {
+    const paid = registrations.filter(r => r.payment_display_status === 'paid');
+    const yetToPay = registrations.filter(r => r.payment_display_status === 'yet_to_pay');
+    const expired = registrations.filter(r => r.payment_display_status === 'expired');
+    const free = registrations.filter(r => r.payment_display_status === 'free');
+
+    return {
+      paidCount: paid.length,
+      paidAmount: paid.reduce((sum, r) => sum + Number(r.payment_session?.amount || 0), 0),
+      yetToPayCount: yetToPay.length,
+      yetToPayAmount: yetToPay.reduce((sum, r) => sum + Number(r.payment_session?.amount || 0), 0),
+      expiredCount: expired.length,
+      expiredAmount: expired.reduce((sum, r) => sum + Number(r.payment_session?.amount || 0), 0),
+      freeCount: free.length,
+      total: registrations.length,
+    };
+  }, [registrations]);
 
   const handleViewDetails = (registration: Registration) => {
     // Transform to match RegistrationDetailsModal interface
@@ -331,9 +426,43 @@ export default function RegistrationsPage() {
         </div>
         <Button onClick={handleExport} variant="outline" className="admin-focus">
           <Download className="h-4 w-4 mr-2" />
-          Export Data
+          Export CSV
         </Button>
       </div>
+
+      {/* Payment Summary Stats Bar */}
+      {!isLoading && registrations.length > 0 && (
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          <Card className="admin-shadow">
+            <CardContent className="pt-4 pb-3">
+              <div className="text-sm font-medium text-muted-foreground">Paid</div>
+              <div className="text-xl font-bold text-green-600">{paymentSummary.paidCount}</div>
+              <div className="text-xs text-muted-foreground">{formatCurrency(paymentSummary.paidAmount)}</div>
+            </CardContent>
+          </Card>
+          <Card className="admin-shadow">
+            <CardContent className="pt-4 pb-3">
+              <div className="text-sm font-medium text-muted-foreground">Yet to Pay</div>
+              <div className="text-xl font-bold text-yellow-600">{paymentSummary.yetToPayCount}</div>
+              <div className="text-xs text-muted-foreground">{formatCurrency(paymentSummary.yetToPayAmount)}</div>
+            </CardContent>
+          </Card>
+          <Card className="admin-shadow">
+            <CardContent className="pt-4 pb-3">
+              <div className="text-sm font-medium text-muted-foreground">Expired</div>
+              <div className="text-xl font-bold text-red-600">{paymentSummary.expiredCount}</div>
+              <div className="text-xs text-muted-foreground">{formatCurrency(paymentSummary.expiredAmount)}</div>
+            </CardContent>
+          </Card>
+          <Card className="admin-shadow">
+            <CardContent className="pt-4 pb-3">
+              <div className="text-sm font-medium text-muted-foreground">Free</div>
+              <div className="text-xl font-bold">{paymentSummary.freeCount}</div>
+              <div className="text-xs text-muted-foreground">of {paymentSummary.total} total</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Registrations Table */}
       <DataTable

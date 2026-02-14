@@ -31,6 +31,7 @@ import {
   Calendar,
   MessageSquare,
   UserCheck,
+  CreditCard,
   Flag,
   TrendingUp,
   Settings,
@@ -60,6 +61,7 @@ const navigationItems = [
       { title: 'Users', url: '/admin/users', icon: Users },
       { title: 'Discussions', url: '/admin/discussions', icon: MessageSquare },
       { title: 'Registrations', url: '/admin/registrations', icon: UserCheck },
+      { title: 'Payments', url: '/admin/payments', icon: CreditCard },
     ],
   },
   {

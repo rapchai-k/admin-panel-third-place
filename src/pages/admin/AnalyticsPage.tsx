@@ -28,7 +28,7 @@ import {
   TrendingUp,
   Activity,
   AlertTriangle,
-  UserCheck
+  UserCheck,
 } from 'lucide-react';
 
 import { useCurrency } from '@/context/CurrencyProvider';
@@ -48,6 +48,11 @@ interface AnalyticsData {
   registrationStatus: Array<{ name: string; value: number; color: string }>;
   monthlyRevenue: Array<{ month: string; revenue: number }>;
   userActivity: Array<{ action: string; count: number }>;
+  // Phase 4: Payment Analytics
+  revenueByEvent: Array<{ name: string; revenue: number }>;
+  revenueByCommunity: Array<{ name: string; revenue: number }>;
+  paymentStatusDistribution: Array<{ name: string; value: number; color: string }>;
+  paymentFunnel: Array<{ stage: string; count: number; percentage: number }>;
 }
 
 const COLORS = {
@@ -120,11 +125,13 @@ export default function AnalyticsPage() {
         .from('event_registrations')
         .select('status');
 
-      // Fetch payment sessions for revenue
-      const { data: paymentData } = await supabase
+      // Fetch ALL payment sessions for revenue + analytics (Phase 4)
+      const { data: allPaymentData } = await supabase
         .from('payment_sessions')
-        .select('amount, created_at, status')
-        .eq('status', 'completed');
+        .select('amount, created_at, status, payment_status, event_id, expires_at');
+
+      // Filter paid sessions for revenue calculations
+      const paymentData = (allPaymentData || []).filter(p => p.payment_status === 'paid');
 
       // Fetch user activity
       const { data: activityData } = await supabase
@@ -198,6 +205,100 @@ export default function AnalyticsPage() {
         .sort((a, b) => b.count - a.count)
         .slice(0, 10);
 
+      // --- Phase 4: Payment Analytics ---
+
+      // Build event lookup map for names
+      const eventLookup = new Map<string, { title: string; communityName: string }>();
+      (eventsResult.data || []).forEach(e => {
+        eventLookup.set(e.id, {
+          title: e.title || 'Unknown Event',
+          communityName: (e as any).community?.name || 'No Community',
+        });
+      });
+
+      // Fetch events with community names for payment analytics
+      const eventIdsInPayments = [...new Set((allPaymentData || []).map(p => p.event_id))];
+      let eventPaymentLookup = new Map<string, { title: string; communityName: string }>();
+      if (eventIdsInPayments.length > 0) {
+        const { data: eventPaymentData } = await supabase
+          .from('events')
+          .select('id, title, community:communities(name)')
+          .in('id', eventIdsInPayments);
+        (eventPaymentData || []).forEach(e => {
+          eventPaymentLookup.set(e.id, {
+            title: e.title || 'Unknown Event',
+            communityName: (e.community as any)?.name || 'No Community',
+          });
+        });
+      }
+
+      // Revenue by Event (top 10, paid only)
+      const revenueByEventMap: { [key: string]: number } = {};
+      paymentData.forEach(p => {
+        const eventInfo = eventPaymentLookup.get(p.event_id);
+        const name = eventInfo?.title || 'Unknown Event';
+        revenueByEventMap[name] = (revenueByEventMap[name] || 0) + Number(p.amount);
+      });
+      const revenueByEvent = Object.entries(revenueByEventMap)
+        .map(([name, revenue]) => ({ name, revenue }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 10);
+
+      // Revenue by Community (paid only)
+      const revenueByCommunityMap: { [key: string]: number } = {};
+      paymentData.forEach(p => {
+        const eventInfo = eventPaymentLookup.get(p.event_id);
+        const name = eventInfo?.communityName || 'No Community';
+        revenueByCommunityMap[name] = (revenueByCommunityMap[name] || 0) + Number(p.amount);
+      });
+      const revenueByCommunity = Object.entries(revenueByCommunityMap)
+        .map(([name, revenue]) => ({ name, revenue }))
+        .sort((a, b) => b.revenue - a.revenue);
+
+      // Payment Status Distribution (all sessions)
+      const PAYMENT_STATUS_COLORS: { [key: string]: string } = {
+        paid: '#16a34a',
+        yet_to_pay: '#ca8a04',
+        expired: '#dc2626',
+        failed: '#ea580c',
+        cancelled: '#9333ea',
+        refunded: '#2563eb',
+      };
+      const PAYMENT_STATUS_LABELS: { [key: string]: string } = {
+        paid: 'Paid',
+        yet_to_pay: 'Yet to Pay',
+        expired: 'Expired',
+        failed: 'Failed',
+        cancelled: 'Cancelled',
+        refunded: 'Refunded',
+      };
+      const paymentStatusCounts: { [key: string]: number } = {};
+      (allPaymentData || []).forEach(p => {
+        // Derive display status (same logic as PaymentsPage)
+        let displayStatus = p.payment_status || 'unknown';
+        if (displayStatus === 'yet_to_pay' && new Date(p.expires_at) < new Date()) {
+          displayStatus = 'expired';
+        }
+        paymentStatusCounts[displayStatus] = (paymentStatusCounts[displayStatus] || 0) + 1;
+      });
+      const paymentStatusDistribution = Object.entries(paymentStatusCounts)
+        .filter(([_, v]) => v > 0)
+        .map(([name, value]) => ({
+          name: PAYMENT_STATUS_LABELS[name] || name,
+          value,
+          color: PAYMENT_STATUS_COLORS[name] || COLORS.muted,
+        }));
+
+      // Payment Conversion Funnel
+      const totalSessions = (allPaymentData || []).length;
+      const paidCount = paymentStatusCounts['paid'] || 0;
+      const yetToPayCount = paymentStatusCounts['yet_to_pay'] || 0;
+      const paymentFunnel = [
+        { stage: 'Sessions Created', count: totalSessions, percentage: 100 },
+        { stage: 'Awaiting Payment', count: yetToPayCount + paidCount, percentage: totalSessions > 0 ? Math.round(((yetToPayCount + paidCount) / totalSessions) * 100) : 0 },
+        { stage: 'Payment Completed', count: paidCount, percentage: totalSessions > 0 ? Math.round((paidCount / totalSessions) * 100) : 0 },
+      ];
+
       return {
         totalUsers: usersResult.count || 0,
         totalCommunities: communitiesResult.count || 0,
@@ -212,7 +313,11 @@ export default function AnalyticsPage() {
         communityGrowth,
         registrationStatus,
         monthlyRevenue,
-        userActivity
+        userActivity,
+        revenueByEvent,
+        revenueByCommunity,
+        paymentStatusDistribution,
+        paymentFunnel,
       };
     }
   });
@@ -348,6 +453,7 @@ export default function AnalyticsPage() {
           <TabsTrigger value="growth">Growth Trends</TabsTrigger>
           <TabsTrigger value="engagement">Engagement</TabsTrigger>
           <TabsTrigger value="revenue">Revenue</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
           <TabsTrigger value="activity">User Activity</TabsTrigger>
         </TabsList>
 
@@ -527,6 +633,196 @@ export default function AnalyticsPage() {
               </ResponsiveContainer>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="payments" className="space-y-4">
+          {/* Revenue by Event + Revenue by Community */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="admin-shadow">
+              <CardHeader>
+                <CardTitle>Revenue by Event</CardTitle>
+                <CardDescription>Top events by paid revenue</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics.revenueByEvent.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={analytics.revenueByEvent} layout="vertical" margin={{ left: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis
+                        type="number"
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(value) => formatCurrency(Number(value))}
+                      />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={11}
+                        width={120}
+                        tickFormatter={(value) => value.length > 18 ? value.slice(0, 18) + '…' : value}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value) => [formatCurrency(Number(value)), 'Revenue']}
+                      />
+                      <Bar dataKey="revenue" fill={COLORS.success} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                    No paid events yet
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="admin-shadow">
+              <CardHeader>
+                <CardTitle>Revenue by Community</CardTitle>
+                <CardDescription>Total paid revenue per community</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics.revenueByCommunity.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={analytics.revenueByCommunity} layout="vertical" margin={{ left: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis
+                        type="number"
+                        stroke="hsl(var(--muted-foreground))"
+                        tickFormatter={(value) => formatCurrency(Number(value))}
+                      />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={11}
+                        width={120}
+                        tickFormatter={(value) => value.length > 18 ? value.slice(0, 18) + '…' : value}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px'
+                        }}
+                        formatter={(value) => [formatCurrency(Number(value)), 'Revenue']}
+                      />
+                      <Bar dataKey="revenue" fill={COLORS.primary} radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+                    No paid community events yet
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Payment Status Distribution + Conversion Funnel */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="admin-shadow">
+              <CardHeader>
+                <CardTitle>Payment Status Distribution</CardTitle>
+                <CardDescription>Breakdown of all payment session outcomes</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics.paymentStatusDistribution.length > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={analytics.paymentStatusDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={3}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {analytics.paymentStatusDistribution.map((entry, index) => (
+                            <Cell key={`ps-cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px'
+                          }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-4 space-y-2">
+                      {analytics.paymentStatusDistribution.map((item, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="text-sm">{item.name}</span>
+                          </div>
+                          <span className="text-sm font-medium">{item.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    No payment sessions yet
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="admin-shadow">
+              <CardHeader>
+                <CardTitle>Payment Conversion Funnel</CardTitle>
+                <CardDescription>From session creation to successful payment</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {analytics.paymentFunnel[0]?.count > 0 ? (
+                  <div className="space-y-4 pt-4">
+                    {analytics.paymentFunnel.map((step, index) => (
+                      <div key={step.stage} className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{step.stage}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold">{step.count}</span>
+                            <Badge
+                              variant={index === 0 ? 'outline' : step.percentage >= 50 ? 'default' : 'secondary'}
+                              className="text-xs"
+                            >
+                              {step.percentage}%
+                            </Badge>
+                          </div>
+                        </div>
+                        <Progress
+                          value={step.percentage}
+                          className="h-3"
+                        />
+                        {index < analytics.paymentFunnel.length - 1 && (
+                          <div className="text-xs text-muted-foreground text-center">
+                            ↓ {analytics.paymentFunnel[index + 1].percentage}% conversion
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                    No payment sessions yet
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-4">

@@ -13,10 +13,14 @@ import {
   AlertCircle,
   Plus,
   ArrowUpRight,
+  DollarSign,
+  CreditCard,
+  Clock,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
+import { useCurrency } from '@/context/CurrencyProvider';
 
 interface DashboardStats {
   totalUsers: number;
@@ -26,6 +30,11 @@ interface DashboardStats {
   recentUsers: number;
   recentEvents: number;
   recentRegistrations: number;
+  totalRevenue: number;
+  paidCount: number;
+  pendingPaymentsCount: number;
+  expiredPaymentsCount: number;
+  recentRevenue: number;
 }
 
 interface SystemStatus {
@@ -42,18 +51,22 @@ interface RecentActivity {
   metadata?: any;
 }
 
-const StatCard = ({ 
-  title, 
-  value, 
-  change, 
-  icon: Icon, 
-  trend 
-}: { 
-  title: string; 
-  value: number; 
-  change: number; 
-  icon: any; 
-  trend: 'up' | 'down' | 'neutral';
+const StatCard = ({
+  title,
+  value,
+  displayValue,
+  change,
+  icon: Icon,
+  trend,
+  subtitle,
+}: {
+  title: string;
+  value?: number;
+  displayValue?: string;
+  change?: number;
+  icon: any;
+  trend?: 'up' | 'down' | 'neutral';
+  subtitle?: string;
 }) => (
   <Card className="admin-shadow hover:shadow-lg admin-transition">
     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -61,16 +74,16 @@ const StatCard = ({
       <Icon className="h-4 w-4 text-muted-foreground" />
     </CardHeader>
     <CardContent>
-      <div className="text-2xl font-bold">{value.toLocaleString()}</div>
+      <div className="text-2xl font-bold">{displayValue ?? (value?.toLocaleString() || '0')}</div>
       <div className="flex items-center gap-1 text-xs text-muted-foreground">
         {trend === 'up' && <TrendingUp className="h-3 w-3 text-success" />}
         {trend === 'down' && <TrendingDown className="h-3 w-3 text-destructive" />}
         <span className={
-          trend === 'up' ? 'text-success' : 
-          trend === 'down' ? 'text-destructive' : 
+          trend === 'up' ? 'text-success' :
+          trend === 'down' ? 'text-destructive' :
           'text-muted-foreground'
         }>
-          {change > 0 ? '+' : ''}{change}% from last month
+          {subtitle ? subtitle : change !== undefined ? `${change > 0 ? '+' : ''}${Math.round(change)}% from last month` : ''}
         </span>
       </div>
     </CardContent>
@@ -88,6 +101,7 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { formatCurrency } = useCurrency();
 
   useEffect(() => {
     loadDashboardData();
@@ -103,7 +117,8 @@ export default function AdminDashboard() {
         communitiesResult,
         eventsResult,
         registrationsResult,
-        activityResult
+        activityResult,
+        paymentsResult
       ] = await Promise.all([
         supabase.from('users').select('id, created_at', { count: 'exact' }),
         supabase.from('communities').select('id, created_at', { count: 'exact' }),
@@ -113,7 +128,8 @@ export default function AdminDashboard() {
           .from('user_activity_log')
           .select('*')
           .order('timestamp', { ascending: false })
-          .limit(10)
+          .limit(10),
+        supabase.from('payment_sessions').select('payment_status, amount, expires_at, updated_at')
       ]);
 
       // Calculate recent activity (last 30 days)
@@ -132,6 +148,25 @@ export default function AdminDashboard() {
         reg => new Date(reg.created_at) > thirtyDaysAgo
       ).length || 0;
 
+      // Calculate payment metrics (gracefully handle query failure)
+      if (paymentsResult.error) {
+        console.warn('Failed to load payment sessions:', paymentsResult.error);
+      }
+      const payments = paymentsResult.data || [];
+      const paidSessions = payments.filter(p => p.payment_status === 'paid');
+      const totalRevenue = paidSessions.reduce((sum, p) => sum + Number(p.amount), 0);
+      const paidCount = paidSessions.length;
+      const now = new Date();
+      const pendingPaymentsCount = payments.filter(
+        p => p.payment_status === 'yet_to_pay' && new Date(p.expires_at) > now
+      ).length;
+      const expiredPaymentsCount = payments.filter(
+        p => p.payment_status === 'yet_to_pay' && new Date(p.expires_at) <= now
+      ).length;
+      const recentRevenue = paidSessions
+        .filter(p => p.updated_at && new Date(p.updated_at) > thirtyDaysAgo)
+        .reduce((sum, p) => sum + Number(p.amount), 0);
+
       setStats({
         totalUsers: usersResult.count || 0,
         totalCommunities: communitiesResult.count || 0,
@@ -140,6 +175,11 @@ export default function AdminDashboard() {
         recentUsers,
         recentEvents,
         recentRegistrations,
+        totalRevenue,
+        paidCount,
+        pendingPaymentsCount,
+        expiredPaymentsCount,
+        recentRevenue,
       });
 
       // Format recent activity
@@ -214,8 +254,8 @@ export default function AdminDashboard() {
           </div>
         </div>
         
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="admin-shadow">
               <CardHeader className="space-y-0 pb-2">
                 <div className="h-4 bg-muted animate-pulse rounded" />
@@ -252,7 +292,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <StatCard
           title="Total Users"
           value={stats?.totalUsers || 0}
@@ -280,6 +320,20 @@ export default function AdminDashboard() {
           change={stats ? (stats.recentRegistrations / Math.max(stats.totalRegistrations, 1)) * 100 : 0}
           icon={UserCheck}
           trend={getTrendDirection(stats?.recentRegistrations || 0, stats?.totalRegistrations || 0)}
+        />
+        <StatCard
+          title="Total Revenue"
+          displayValue={formatCurrency(stats?.totalRevenue || 0)}
+          subtitle={`${formatCurrency(stats?.recentRevenue || 0)} in last 30 days`}
+          icon={DollarSign}
+          trend={stats && stats.recentRevenue > 0 ? 'up' : 'neutral'}
+        />
+        <StatCard
+          title="Payments"
+          value={stats?.paidCount || 0}
+          subtitle={`${stats?.pendingPaymentsCount || 0} pending · ${stats?.expiredPaymentsCount || 0} expired`}
+          icon={CreditCard}
+          trend={stats && stats.pendingPaymentsCount > 0 ? 'down' : 'neutral'}
         />
       </div>
 

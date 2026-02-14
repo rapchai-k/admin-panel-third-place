@@ -20,9 +20,11 @@ import {
   Phone,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  Copy,
 } from 'lucide-react';
 import { useCurrency } from '@/context/CurrencyProvider';
+import { useToast } from '@/hooks/use-toast';
 
 interface Registration {
   id: string;
@@ -46,8 +48,10 @@ interface Registration {
     amount: number;
     currency: string;
     expires_at: string;
-    cashfree_order_id?: string | null;
-    cashfree_payment_id?: string | null;
+    razorpay_payment_link_id?: string | null;
+    razorpay_payment_id?: string | null;
+    gateway?: string | null;
+    updated_at?: string | null;
   } | null;
   registered_at: string;
   special_requests?: string;
@@ -83,8 +87,30 @@ export function RegistrationDetailsModal({
 }: RegistrationDetailsModalProps) {
 
   const { formatCurrency } = useCurrency();
+  const { toast } = useToast();
 
   if (!registration) return null;
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for older browsers / non-HTTPS contexts
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      toast({ title: 'Copied', description: `${label} copied to clipboard.` });
+    } catch {
+      toast({ title: 'Copy Failed', description: 'Could not copy to clipboard.', variant: 'destructive' });
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -153,9 +179,27 @@ export function RegistrationDetailsModal({
             <div className="text-sm text-muted-foreground">
               <strong>Amount:</strong> {formatCurrency(registration.payment_session.amount)}
             </div>
-            {registration.payment_session.cashfree_payment_id && (
+            {registration.payment_session.updated_at && (
               <div className="text-sm text-muted-foreground">
-                <strong>Payment ID:</strong> <code className="text-xs bg-muted px-2 py-1 rounded">{registration.payment_session.cashfree_payment_id}</code>
+                <strong>Paid At:</strong> {new Date(registration.payment_session.updated_at).toLocaleString()}
+              </div>
+            )}
+            {registration.payment_session.gateway && (
+              <div className="text-sm text-muted-foreground">
+                <strong>Gateway:</strong> {registration.payment_session.gateway.charAt(0).toUpperCase() + registration.payment_session.gateway.slice(1)}
+              </div>
+            )}
+            {registration.payment_session.razorpay_payment_id && (
+              <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <strong>Payment ID:</strong>
+                <code className="text-xs bg-muted px-2 py-1 rounded">{registration.payment_session.razorpay_payment_id}</code>
+                <button
+                  onClick={() => copyToClipboard(registration.payment_session!.razorpay_payment_id!, 'Payment ID')}
+                  className="p-1 hover:bg-muted rounded transition-colors"
+                  title="Copy Payment ID"
+                >
+                  <Copy className="h-3 w-3 text-muted-foreground" />
+                </button>
               </div>
             )}
           </div>
@@ -173,6 +217,11 @@ export function RegistrationDetailsModal({
               <div className="text-sm text-muted-foreground">
                 <strong>Amount Due:</strong> {formatCurrency(registration.payment_session.amount)}
               </div>
+              {registration.payment_session.gateway && (
+                <div className="text-sm text-muted-foreground">
+                  <strong>Gateway:</strong> {registration.payment_session.gateway.charAt(0).toUpperCase() + registration.payment_session.gateway.slice(1)}
+                </div>
+              )}
             </div>
           )
         };
@@ -187,9 +236,22 @@ export function RegistrationDetailsModal({
             <div className="text-sm text-muted-foreground">
               <strong>Expires:</strong> {new Date(registration.payment_session.expires_at).toLocaleString()}
             </div>
-            {registration.payment_session.cashfree_order_id && (
+            {registration.payment_session.gateway && (
               <div className="text-sm text-muted-foreground">
-                <strong>Order ID:</strong> <code className="text-xs bg-muted px-2 py-1 rounded">{registration.payment_session.cashfree_order_id}</code>
+                <strong>Gateway:</strong> {registration.payment_session.gateway.charAt(0).toUpperCase() + registration.payment_session.gateway.slice(1)}
+              </div>
+            )}
+            {registration.payment_session.razorpay_payment_link_id && (
+              <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+                <strong>Payment Link ID:</strong>
+                <code className="text-xs bg-muted px-2 py-1 rounded">{registration.payment_session.razorpay_payment_link_id}</code>
+                <button
+                  onClick={() => copyToClipboard(registration.payment_session!.razorpay_payment_link_id!, 'Payment Link ID')}
+                  className="p-1 hover:bg-muted rounded transition-colors"
+                  title="Copy Payment Link ID"
+                >
+                  <Copy className="h-3 w-3 text-muted-foreground" />
+                </button>
               </div>
             )}
           </div>
