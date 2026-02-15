@@ -16,11 +16,14 @@ import {
   Edit,
   User,
   Building,
-  Clock
+  Clock,
+  Repeat
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent as AlertContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader as AlertHeader, AlertDialogTitle as AlertTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { EventModal } from './EventModal';
 import { useCurrency } from '@/context/CurrencyProvider';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface Event {
   id: string;
@@ -33,6 +36,9 @@ interface Event {
   currency?: string;
   external_link?: string;
   is_cancelled: boolean;
+  is_recurring_parent?: boolean;
+  parent_event_id?: string | null;
+  series_index?: number | null;
   created_at: string;
   community_id: string;
   community: {
@@ -76,8 +82,13 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const { formatCurrency } = useCurrency();
+  const { toast } = useToast();
 
   if (!event) return null;
+
+  const isPartOfSeries = !!event.parent_event_id || !!event.is_recurring_parent;
+  // The parent id of the series: if this IS the parent, use its own id; otherwise use parent_event_id
+  const seriesParentId = event.parent_event_id || (event.is_recurring_parent ? event.id : null);
 
   const handleEdit = () => {
     setIsEditModalOpen(true);
@@ -86,6 +97,66 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
   const handleEditSuccess = () => {
     onSuccess?.();
     setIsEditModalOpen(false);
+  };
+
+  const handleCancelFutureInstances = async () => {
+    if (!seriesParentId) return;
+    try {
+      // Cancel future child events
+      const { error } = await supabase
+        .from('events')
+        .update({ is_cancelled: true })
+        .eq('parent_event_id', seriesParentId)
+        .eq('is_cancelled', false)
+        .gte('date_time', new Date().toISOString());
+
+      if (error) throw error;
+
+      // Also cancel the parent itself if it's in the future
+      if (event.is_recurring_parent) {
+        await supabase
+          .from('events')
+          .update({ is_cancelled: true })
+          .eq('id', seriesParentId)
+          .eq('is_cancelled', false)
+          .gte('date_time', new Date().toISOString());
+      }
+
+      toast({ title: 'Future Instances Cancelled', description: 'All future instances of this series have been cancelled.' });
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      console.error('Cancel future instances failed', err);
+      toast({ title: 'Failed', description: 'Could not cancel future instances.', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteSeries = async () => {
+    if (!seriesParentId) return;
+    try {
+      // Delete all child events in the series
+      const { error: childError } = await supabase
+        .from('events')
+        .delete()
+        .eq('parent_event_id', seriesParentId);
+
+      if (childError) throw childError;
+
+      // Delete the parent event
+      const { error: parentError } = await supabase
+        .from('events')
+        .delete()
+        .eq('id', seriesParentId);
+
+      if (parentError) throw parentError;
+
+      toast({ title: 'Series Deleted', description: 'The entire recurring series has been deleted.' });
+      onSuccess?.();
+      onClose();
+    } catch (err) {
+      console.error('Delete series failed', err);
+      toast({ title: 'Failed', description: 'Could not delete the series. Events with registrations cannot be deleted.', variant: 'destructive' });
+    }
   };
 
   const formatPrice = (price?: number) => {
@@ -137,6 +208,18 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
                 <p className="text-muted-foreground">{event.description}</p>
               )}
             </div>
+
+            {/* Recurring Series Info */}
+            {isPartOfSeries && (
+              <div className="flex items-center gap-2 rounded-md border bg-blue-50 p-3 text-sm text-blue-700">
+                <Repeat className="h-4 w-4 flex-shrink-0" />
+                <span>
+                  Part of a recurring series
+                  {event.series_index ? ` — Instance #${event.series_index}` : ''}
+                  . Changes to this event only affect this instance.
+                </span>
+              </div>
+            )}
 
             <Separator />
 
@@ -279,6 +362,55 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
                 })}
               </p>
             </div>
+
+            {/* Series Bulk Operations */}
+            {isPartOfSeries && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <Repeat className="h-4 w-4 text-primary" /> Series Actions
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" size="sm">Cancel All Future Instances</Button>
+                      </AlertDialogTrigger>
+                      <AlertContent>
+                        <AlertHeader>
+                          <AlertTitle>Cancel all future instances?</AlertTitle>
+                          <AlertDialogDescription>
+                            This will cancel all upcoming instances of this recurring series. Past events are not affected.
+                          </AlertDialogDescription>
+                        </AlertHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Nevermind</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleCancelFutureInstances}>Yes, cancel all future</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertContent>
+                    </AlertDialog>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm">Delete Entire Series</Button>
+                      </AlertDialogTrigger>
+                      <AlertContent>
+                        <AlertHeader>
+                          <AlertTitle>Delete the entire series?</AlertTitle>
+                          <AlertDialogDescription>
+                            This will permanently delete ALL events in this recurring series, including the parent template. This cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Nevermind</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDeleteSeries} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Yes, delete series</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              </>
+            )}
 
             {/* Actions (replaces table dropdown) */}
             <div className="flex items-center justify-end gap-2 pt-2">

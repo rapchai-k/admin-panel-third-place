@@ -3,7 +3,7 @@ import { DataTable, Column } from '@/components/admin/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, Calendar, MapPin, Users, Clock } from 'lucide-react';
+import { Plus, Calendar, MapPin, Users, Clock, Repeat } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { EventModal } from '@/components/admin/EventModal';
@@ -25,6 +25,9 @@ interface Event {
   community_id: string;
   host_id?: string;
   is_cancelled: boolean;
+  is_recurring_parent?: boolean;
+  parent_event_id?: string | null;
+  series_index?: number | null;
   created_at: string;
   updated_at: string;
   community: {
@@ -36,7 +39,6 @@ interface Event {
     photo_url?: string;
   } | null;
   registration_count?: number;
-  tags?: { name: string }[];
 }
 
 // Helpers for null-safe strings and initials
@@ -73,7 +75,15 @@ const createColumns = (formatCurrency: (value: number, code?: string) => string)
           </AvatarFallback>
         </Avatar>
         <div>
-          <p className="font-medium">{row.title}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="font-medium">{row.title}</p>
+            {(row.parent_event_id || row.is_recurring_parent) && (
+              <Badge variant="outline" className="text-xs gap-1 px-1.5 py-0">
+                <Repeat className="h-3 w-3" />
+                {row.series_index ? `#${row.series_index}` : 'Series'}
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground truncate max-w-[200px]">
             {row.description || 'No description'}
           </p>
@@ -224,8 +234,7 @@ export default function EventsPage() {
           *,
           community:communities(name, city),
           host:users(name, photo_url),
-          registration_count:event_registrations(count),
-          tags:event_tags(tag:tags(name))
+          registration_count:event_registrations(count)
         `)
         .order('date_time', { ascending: false });
 
@@ -234,7 +243,6 @@ export default function EventsPage() {
       const transformedData = eventsData?.map(event => ({
         ...event,
         registration_count: event.registration_count?.[0]?.count || 0,
-        tags: event.tags?.map(t => t.tag) || [],
       })) || [];
 
       setEvents(transformedData);

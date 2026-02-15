@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" fill="none">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#3B82F6"/>
+  
+  <!-- Dashboard Grid Icon -->
+  <g transform="translate(8, 8)">
+    <!-- Top Left -->
+    <rect x="0" y="0" width="6" height="6" rx="1.5" fill="white" opacity="0.95"/>
+    
+    <!-- Top Right -->
+    <rect x="10" y="0" width="6" height="6" rx="1.5" fill="white" opacity="0.75"/>
+    
+    <!-- Bottom Left -->
+    <rect x="0" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.75"/>
+    
+    <!-- Bottom Right -->
+    <rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.95"/>
+  </g>
+</svg>
+

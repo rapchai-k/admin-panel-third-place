@@ -810,7 +810,7 @@ Weights: 100-1000 variable font weight
 - **Git Hooks:** Pre-commit validation (planned)
 
 ### Deployment & CI/CD
-- **Hosting:** Lovable platform
+- **Hosting:** Cloud platform
 - **Database:** Supabase managed PostgreSQL
 - **Storage:** Supabase managed storage buckets
 - **Domain:** Custom domain ready
@@ -894,14 +894,14 @@ Weights: 100-1000 variable font weight
 ## 📞 Support & Contact
 
 ### Development Team
-- **Lead Developer:** AI Assistant (Lovable Platform)
+- **Lead Developer:** AI Assistant
 - **Architecture:** Modern React + Supabase stack
 - **Documentation:** Comprehensive project tracking
-- **Support:** Available through Lovable platform
+- **Support:** Available through development team
 
 ### Resources
 - **Documentation:** This tracker + inline code comments
-- **Deployment:** Lovable platform hosting
+- **Deployment:** Cloud platform hosting
 - **Database:** Supabase dashboard and tools
 - **Monitoring:** Built-in analytics and logging
 

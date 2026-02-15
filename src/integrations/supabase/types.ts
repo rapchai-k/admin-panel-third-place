@@ -391,36 +391,7 @@ export type Database = {
           },
         ]
       }
-      event_tags: {
-        Row: {
-          event_id: string
-          tag_id: string
-        }
-        Insert: {
-          event_id: string
-          tag_id: string
-        }
-        Update: {
-          event_id?: string
-          tag_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "event_tags_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "event_tags_tag_id_fkey"
-            columns: ["tag_id"]
-            isOneToOne: false
-            referencedRelation: "tags"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
+
       events: {
         Row: {
           capacity: number
@@ -434,7 +405,18 @@ export type Database = {
           id: string
           image_url: string | null
           is_cancelled: boolean
+          is_recurring_parent: boolean
+          parent_event_id: string | null
           price: number | null
+          recurrence_count: number | null
+          recurrence_day_of_month: number | null
+          recurrence_days_of_week: number[] | null
+          recurrence_end_date: string | null
+          recurrence_end_type: string | null
+          recurrence_frequency: number | null
+          recurrence_metadata: Json | null
+          recurrence_pattern: string | null
+          series_index: number | null
           title: string
           updated_at: string
           venue: string
@@ -451,7 +433,18 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_cancelled?: boolean
+          is_recurring_parent?: boolean
+          parent_event_id?: string | null
           price?: number | null
+          recurrence_count?: number | null
+          recurrence_day_of_month?: number | null
+          recurrence_days_of_week?: number[] | null
+          recurrence_end_date?: string | null
+          recurrence_end_type?: string | null
+          recurrence_frequency?: number | null
+          recurrence_metadata?: Json | null
+          recurrence_pattern?: string | null
+          series_index?: number | null
           title: string
           updated_at?: string
           venue: string
@@ -468,7 +461,18 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_cancelled?: boolean
+          is_recurring_parent?: boolean
+          parent_event_id?: string | null
           price?: number | null
+          recurrence_count?: number | null
+          recurrence_day_of_month?: number | null
+          recurrence_days_of_week?: number[] | null
+          recurrence_end_date?: string | null
+          recurrence_end_type?: string | null
+          recurrence_frequency?: number | null
+          recurrence_metadata?: Json | null
+          recurrence_pattern?: string | null
+          series_index?: number | null
           title?: string
           updated_at?: string
           venue?: string
@@ -486,6 +490,13 @@ export type Database = {
             columns: ["host_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "events_parent_event_id_fkey"
+            columns: ["parent_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -702,24 +713,7 @@ export type Database = {
           },
         ]
       }
-      tags: {
-        Row: {
-          created_at: string
-          id: string
-          name: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          name: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          name?: string
-        }
-        Relationships: []
-      }
+
       user_activity_log: {
         Row: {
           action_type: string

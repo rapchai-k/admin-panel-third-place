@@ -1,14 +1,12 @@
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
+# MyThirdPlace Admin Panel - Robots.txt
+# This is an admin panel - restrict search engine indexing
 
 User-agent: *
-Allow: /
+Disallow: /
+
+# Allow specific bots for monitoring and security
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /

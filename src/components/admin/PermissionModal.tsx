@@ -146,7 +146,7 @@ export function PermissionModal({ isOpen, onClose, permission, onSave }: Permiss
       if (!resourceType || resourceType === 'global') return [];
 
       // Use type assertion to fix the dynamic table query
-      const validTableNames = ['users', 'communities', 'discussions', 'events', 'tags'] as const;
+      const validTableNames = ['users', 'communities', 'discussions', 'events'] as const;
       if (!validTableNames.includes(resourceType as any)) return [];
 
       const { data, error } = await supabase

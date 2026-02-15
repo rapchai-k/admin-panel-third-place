@@ -7,469 +7,414 @@ import {
   MapPin,
   Calendar,
   UserCheck,
-  TrendingUp,
-  TrendingDown,
-  Activity,
+  MessageSquare,
   AlertCircle,
   Plus,
   ArrowUpRight,
-  DollarSign,
   CreditCard,
-  Clock,
+  Flag,
+  Eye,
+  Loader2,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useCurrency } from '@/context/CurrencyProvider';
+import { EventModal } from '@/components/admin/EventModal';
+import { CommunityModal } from '@/components/admin/CommunityModal';
+import { UserModal } from '@/components/admin/UserModal';
+import { DiscussionModal } from '@/components/admin/DiscussionModal';
 
-interface DashboardStats {
-  totalUsers: number;
-  totalCommunities: number;
-  totalEvents: number;
-  totalRegistrations: number;
-  recentUsers: number;
-  recentEvents: number;
-  recentRegistrations: number;
-  totalRevenue: number;
-  paidCount: number;
-  pendingPaymentsCount: number;
-  expiredPaymentsCount: number;
-  recentRevenue: number;
-}
-
-interface SystemStatus {
-  database: 'operational' | 'warning' | 'error';
-  auth: 'operational' | 'warning' | 'error';
-  storage: 'operational' | 'warning' | 'error';
-}
-
-interface RecentActivity {
+// ── Types ─────────────────────────────────────────────────────────────
+interface FlagRow {
   id: string;
-  type: 'user_joined' | 'event_created' | 'community_created' | 'registration_made';
-  description: string;
-  timestamp: string;
-  metadata?: any;
+  reason: string;
+  status: string;
+  created_at: string;
+  flagged_user: { name: string } | null;
+  flagged_by: { name: string } | null;
 }
 
-const StatCard = ({
-  title,
-  value,
-  displayValue,
-  change,
-  icon: Icon,
-  trend,
-  subtitle,
-}: {
-  title: string;
-  value?: number;
-  displayValue?: string;
-  change?: number;
-  icon: any;
-  trend?: 'up' | 'down' | 'neutral';
-  subtitle?: string;
-}) => (
-  <Card className="admin-shadow hover:shadow-lg admin-transition">
-    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-      <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      <Icon className="h-4 w-4 text-muted-foreground" />
-    </CardHeader>
-    <CardContent>
-      <div className="text-2xl font-bold">{displayValue ?? (value?.toLocaleString() || '0')}</div>
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
-        {trend === 'up' && <TrendingUp className="h-3 w-3 text-success" />}
-        {trend === 'down' && <TrendingDown className="h-3 w-3 text-destructive" />}
-        <span className={
-          trend === 'up' ? 'text-success' :
-          trend === 'down' ? 'text-destructive' :
-          'text-muted-foreground'
-        }>
-          {subtitle ? subtitle : change !== undefined ? `${change > 0 ? '+' : ''}${Math.round(change)}% from last month` : ''}
-        </span>
-      </div>
-    </CardContent>
-  </Card>
-);
+interface RegistrationRow {
+  id: string;
+  status: string;
+  created_at: string;
+  user: { name: string } | null;
+  event: { title: string } | null;
+}
 
+interface PaymentRow {
+  id: string;
+  amount: number;
+  payment_status: string | null;
+  created_at: string;
+  user: { name: string } | null;
+  event: { title: string } | null;
+}
+
+interface UserRow {
+  id: string;
+  name: string;
+  created_at: string;
+  is_banned: boolean;
+}
+
+interface CommunityRow {
+  id: string;
+  name: string;
+  city: string;
+  created_at: string;
+}
+
+interface DashboardData {
+  flags: FlagRow[];
+  registrations: RegistrationRow[];
+  payments: PaymentRow[];
+  users: UserRow[];
+  communities: CommunityRow[];
+}
+
+// ── Create Actions config ─────────────────────────────────────────────
+type ModalKey = 'event' | 'community' | 'user' | 'discussion';
+type CreateAction = {
+  label: string;
+  icon: typeof Calendar;
+  color: string;
+  bg: string;
+} & ({ modal: ModalKey; route?: never } | { route: string; modal?: never });
+
+const createActions: CreateAction[] = [
+  { label: 'Create Event', icon: Calendar, modal: 'event', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40' },
+  { label: 'Add Community', icon: MapPin, modal: 'community', color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40' },
+  { label: 'Create User', icon: Users, modal: 'user', color: 'text-violet-600 dark:text-violet-400', bg: 'bg-violet-50 dark:bg-violet-950/40' },
+  { label: 'New Discussion', icon: MessageSquare, modal: 'discussion', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40' },
+  { label: 'New Registration', icon: UserCheck, route: '/admin/registrations', color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-50 dark:bg-pink-950/40' },
+  { label: 'Record Payment', icon: CreditCard, route: '/admin/payments', color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-950/40' },
+];
+
+// ── Helper: relative time ─────────────────────────────────────────────
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+// ── Component ─────────────────────────────────────────────────────────
 export default function AdminDashboard() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
-    database: 'operational',
-    auth: 'operational',
-    storage: 'operational'
-  });
+  const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [openModal, setOpenModal] = useState<ModalKey | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { formatCurrency } = useCurrency();
 
   useEffect(() => {
-    loadDashboardData();
+    loadDashboard();
   }, []);
 
-  const loadDashboardData = async () => {
+  const handleCreateAction = (action: CreateAction) => {
+    if (action.modal) {
+      setOpenModal(action.modal);
+    } else {
+      navigate(action.route);
+    }
+  };
+
+  const handleModalSuccess = () => {
+    setOpenModal(null);
+    loadDashboard();
+  };
+
+  const loadDashboard = async () => {
     try {
       setIsLoading(true);
-      
-      // Fetch dashboard statistics
-      const [
-        usersResult,
-        communitiesResult,
-        eventsResult,
-        registrationsResult,
-        activityResult,
-        paymentsResult
-      ] = await Promise.all([
-        supabase.from('users').select('id, created_at', { count: 'exact' }),
-        supabase.from('communities').select('id, created_at', { count: 'exact' }),
-        supabase.from('events').select('id, created_at', { count: 'exact' }),
-        supabase.from('event_registrations').select('id, created_at', { count: 'exact' }),
+
+      const [flagsRes, regsRes, paymentsRes, usersRes, communitiesRes] = await Promise.all([
         supabase
-          .from('user_activity_log')
-          .select('*')
-          .order('timestamp', { ascending: false })
-          .limit(10),
-        supabase.from('payment_sessions').select('payment_status, amount, expires_at, updated_at')
+          .from('flags')
+          .select('id, reason, status, created_at, flagged_user:flagged_user_id(name), flagged_by:flagged_by_id(name)')
+          .in('status', ['open', 'urgent'])
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('event_registrations')
+          .select('id, status, created_at, user:user_id(name), event:event_id(title)')
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('payment_sessions')
+          .select('id, amount, payment_status, created_at, user:user_id(name), event:event_id(title)')
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('users')
+          .select('id, name, created_at, is_banned')
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('communities')
+          .select('id, name, city, created_at')
+          .order('created_at', { ascending: false })
+          .limit(5),
       ]);
 
-      // Calculate recent activity (last 30 days)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const recentUsers = usersResult.data?.filter(
-        user => new Date(user.created_at) > thirtyDaysAgo
-      ).length || 0;
-
-      const recentEvents = eventsResult.data?.filter(
-        event => new Date(event.created_at) > thirtyDaysAgo
-      ).length || 0;
-
-      const recentRegistrations = registrationsResult.data?.filter(
-        reg => new Date(reg.created_at) > thirtyDaysAgo
-      ).length || 0;
-
-      // Calculate payment metrics (gracefully handle query failure)
-      if (paymentsResult.error) {
-        console.warn('Failed to load payment sessions:', paymentsResult.error);
-      }
-      const payments = paymentsResult.data || [];
-      const paidSessions = payments.filter(p => p.payment_status === 'paid');
-      const totalRevenue = paidSessions.reduce((sum, p) => sum + Number(p.amount), 0);
-      const paidCount = paidSessions.length;
-      const now = new Date();
-      const pendingPaymentsCount = payments.filter(
-        p => p.payment_status === 'yet_to_pay' && new Date(p.expires_at) > now
-      ).length;
-      const expiredPaymentsCount = payments.filter(
-        p => p.payment_status === 'yet_to_pay' && new Date(p.expires_at) <= now
-      ).length;
-      const recentRevenue = paidSessions
-        .filter(p => p.updated_at && new Date(p.updated_at) > thirtyDaysAgo)
-        .reduce((sum, p) => sum + Number(p.amount), 0);
-
-      setStats({
-        totalUsers: usersResult.count || 0,
-        totalCommunities: communitiesResult.count || 0,
-        totalEvents: eventsResult.count || 0,
-        totalRegistrations: registrationsResult.count || 0,
-        recentUsers,
-        recentEvents,
-        recentRegistrations,
-        totalRevenue,
-        paidCount,
-        pendingPaymentsCount,
-        expiredPaymentsCount,
-        recentRevenue,
+      setData({
+        flags: (flagsRes.data as unknown as FlagRow[]) || [],
+        registrations: (regsRes.data as unknown as RegistrationRow[]) || [],
+        payments: (paymentsRes.data as unknown as PaymentRow[]) || [],
+        users: (usersRes.data as UserRow[]) || [],
+        communities: (communitiesRes.data as CommunityRow[]) || [],
       });
-
-      // Format recent activity
-      const formattedActivity: RecentActivity[] = activityResult.data?.map(activity => ({
-        id: activity.id,
-        type: activity.action_type as any,
-        description: getActivityDescription(activity),
-        timestamp: activity.timestamp,
-        metadata: activity.metadata,
-      })) || [];
-
-      setRecentActivity(formattedActivity);
-
-      // Check system status
-      const dbHealthy = !usersResult.error && !communitiesResult.error;
-      const authHealthy = true; // If we're here, auth is working
-      setSystemStatus({
-        database: dbHealthy ? 'operational' : 'error',
-        auth: authHealthy ? 'operational' : 'warning',
-        storage: 'operational' // Assuming storage is fine for now
-      });
-
     } catch (error) {
-      console.error('Error loading dashboard data:', error);
-      setSystemStatus({
-        database: 'error',
-        auth: 'warning',
-        storage: 'warning'
-      });
+      console.error('Error loading dashboard:', error);
       toast({
-        title: "Error Loading Dashboard",
-        description: "Failed to load dashboard statistics.",
-        variant: "destructive",
+        title: 'Error Loading Dashboard',
+        description: 'Failed to load dashboard data.',
+        variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getActivityDescription = (activity: any): string => {
-    const actionType = activity.action_type;
-    const metadata = activity.metadata;
-    
-    switch (actionType) {
-      case 'user_created':
-        return `New user ${metadata?.name || 'Unknown'} joined the platform`;
-      case 'event_created':
-        return `Event "${metadata?.title || 'Unknown'}" was created`;
-      case 'community_created':
-        return `Community "${metadata?.name || 'Unknown'}" was created`;
-      case 'registration_created':
-        return `New registration for event "${metadata?.event_title || 'Unknown'}"`;
-      default:
-        return `${actionType.replace('_', ' ')} activity`;
-    }
-  };
-
-  const getTrendDirection = (recent: number, total: number): 'up' | 'down' | 'neutral' => {
-    const percentage = total > 0 ? (recent / total) * 100 : 0;
-    if (percentage > 20) return 'up';
-    if (percentage < 5) return 'down';
-    return 'neutral';
-  };
-
+  // ── Loading skeleton ──────────────────────────────────────────────
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1>Dashboard</h1>
-            <p className="text-muted-foreground">Overview of your community platform</p>
-          </div>
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">Loading your command center…</p>
         </div>
-        
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="admin-shadow">
-              <CardHeader className="space-y-0 pb-2">
-                <div className="h-4 bg-muted animate-pulse rounded" />
-              </CardHeader>
-              <CardContent>
-                <div className="h-8 bg-muted animate-pulse rounded mb-2" />
-                <div className="h-3 bg-muted animate-pulse rounded w-3/4" />
-              </CardContent>
-            </Card>
-          ))}
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1>Dashboard</h1>
-          <p className="text-muted-foreground">Welcome to your community platform control center</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={loadDashboardData} className="admin-focus">
-            <Activity className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          <Button onClick={() => navigate('/admin/communities')} className="admin-focus">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Community
-          </Button>
-        </div>
+    <div className="space-y-8">
+      {/* ── Header ───────────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground">Welcome to your community platform control center</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          title="Total Users"
-          value={stats?.totalUsers || 0}
-          change={stats ? (stats.recentUsers / Math.max(stats.totalUsers, 1)) * 100 : 0}
-          icon={Users}
-          trend={getTrendDirection(stats?.recentUsers || 0, stats?.totalUsers || 0)}
-        />
-        <StatCard
-          title="Communities"
-          value={stats?.totalCommunities || 0}
-          change={15}
-          icon={MapPin}
-          trend="up"
-        />
-        <StatCard
-          title="Events"
-          value={stats?.totalEvents || 0}
-          change={stats ? (stats.recentEvents / Math.max(stats.totalEvents, 1)) * 100 : 0}
-          icon={Calendar}
-          trend={getTrendDirection(stats?.recentEvents || 0, stats?.totalEvents || 0)}
-        />
-        <StatCard
-          title="Registrations"
-          value={stats?.totalRegistrations || 0}
-          change={stats ? (stats.recentRegistrations / Math.max(stats.totalRegistrations, 1)) * 100 : 0}
-          icon={UserCheck}
-          trend={getTrendDirection(stats?.recentRegistrations || 0, stats?.totalRegistrations || 0)}
-        />
-        <StatCard
-          title="Total Revenue"
-          displayValue={formatCurrency(stats?.totalRevenue || 0)}
-          subtitle={`${formatCurrency(stats?.recentRevenue || 0)} in last 30 days`}
-          icon={DollarSign}
-          trend={stats && stats.recentRevenue > 0 ? 'up' : 'neutral'}
-        />
-        <StatCard
-          title="Payments"
-          value={stats?.paidCount || 0}
-          subtitle={`${stats?.pendingPaymentsCount || 0} pending · ${stats?.expiredPaymentsCount || 0} expired`}
-          icon={CreditCard}
-          trend={stats && stats.pendingPaymentsCount > 0 ? 'down' : 'neutral'}
-        />
-      </div>
+      {/* ── Create Actions ───────────────────────────────────────── */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4">Quick Create</h2>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+          {createActions.map((action) => (
+            <button
+              key={action.label}
+              onClick={() => handleCreateAction(action)}
+              className={`group relative flex flex-col items-center gap-3 rounded-xl border p-6 ${action.bg} hover:shadow-lg admin-transition cursor-pointer text-center`}
+            >
+              <div className={`rounded-full p-3 bg-white/80 dark:bg-white/10 shadow-sm group-hover:scale-110 admin-transition`}>
+                <action.icon className={`h-6 w-6 ${action.color}`} />
+              </div>
+              <span className="text-sm font-medium">{action.label}</span>
+              <Plus className="absolute top-2 right-2 h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 admin-transition" />
+            </button>
+          ))}
+        </div>
+      </section>
 
-      {/* Content Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Recent Activity */}
-        <Card className="lg:col-span-2 admin-shadow">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest platform activities and user actions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.length === 0 ? (
-                <p className="text-muted-foreground text-center py-4">No recent activity</p>
+      {/* ── View Actions (latest data cards) ─────────────────────── */}
+      <section>
+        <h2 className="text-lg font-semibold mb-4">At a Glance</h2>
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+
+          {/* Open Flags */}
+          <Card className="admin-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Flag className="h-4 w-4 text-destructive" />
+                  <CardTitle className="text-base">Open Flags</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/moderation')}>
+                  View All <ArrowUpRight className="h-3 w-3 ml-1" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {data?.flags.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">No open flags 🎉</p>
               ) : (
-                recentActivity.slice(0, 6).map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                    <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{activity.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(activity.timestamp).toLocaleDateString()} at{' '}
-                        {new Date(activity.timestamp).toLocaleTimeString()}
-                      </p>
+                data?.flags.map((f) => (
+                  <div key={f.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{f.flagged_user?.name || 'Unknown user'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{f.reason}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant={f.status === 'urgent' ? 'destructive' : 'secondary'} className="text-xs">
+                        {f.status}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(f.created_at)}</span>
                     </div>
                   </div>
                 ))
               )}
-              {recentActivity.length > 6 && (
-                <Button 
-                  variant="ghost" 
-                  className="w-full admin-focus"
-                  onClick={() => navigate('/admin/analytics')}
-                >
-                  View All Activity
-                  <ArrowUpRight className="h-4 w-4 ml-2" />
+            </CardContent>
+          </Card>
+
+          {/* Latest Registrations */}
+          <Card className="admin-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-pink-500" />
+                  <CardTitle className="text-base">Latest Registrations</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/registrations')}>
+                  View All <ArrowUpRight className="h-3 w-3 ml-1" />
                 </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {data?.registrations.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">No registrations yet</p>
+              ) : (
+                data?.registrations.map((r) => (
+                  <div key={r.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{r.user?.name || 'Unknown'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{r.event?.title || 'Unknown event'}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">{timeAgo(r.created_at)}</span>
+                  </div>
+                ))
               )}
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        {/* Quick Actions */}
-        <Card className="admin-shadow">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common administrative tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button 
-              variant="outline" 
-              className="w-full justify-start admin-focus"
-              onClick={() => navigate('/admin/users')}
-            >
-              <Users className="h-4 w-4 mr-2" />
-              Manage Users
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start admin-focus"
-              onClick={() => navigate('/admin/events')}
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              Create Event
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start admin-focus"
-              onClick={() => navigate('/admin/communities')}
-            >
-              <MapPin className="h-4 w-4 mr-2" />
-              Add Community
-            </Button>
-            <Button 
-              variant="outline" 
-              className="w-full justify-start admin-focus"
-              onClick={() => navigate('/admin/moderation')}
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              View Flags
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+          {/* Latest Payments */}
+          <Card className="admin-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-teal-500" />
+                  <CardTitle className="text-base">Latest Payments</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/payments')}>
+                  View All <ArrowUpRight className="h-3 w-3 ml-1" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {data?.payments.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">No payments yet</p>
+              ) : (
+                data?.payments.map((p) => (
+                  <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{p.user?.name || 'Unknown'}</p>
+                      <p className="text-xs text-muted-foreground truncate">{p.event?.title || 'Unknown event'}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant={p.payment_status === 'paid' ? 'default' : 'secondary'} className="text-xs">
+                        {p.payment_status === 'paid' ? formatCurrency(p.amount) : p.payment_status || 'pending'}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(p.created_at)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
 
-      {/* System Status */}
-      <Card className="admin-shadow">
-        <CardHeader>
-          <CardTitle>System Status</CardTitle>
-          <CardDescription>Current system health and performance metrics</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${
-                systemStatus.database === 'operational' ? 'bg-success' :
-                systemStatus.database === 'warning' ? 'bg-warning' : 'bg-destructive'
-              }`} />
-              <div>
-                <p className="text-sm font-medium">Database</p>
-                <p className="text-xs text-muted-foreground">
-                  {systemStatus.database === 'operational' ? 'Operational' :
-                   systemStatus.database === 'warning' ? 'Warning' : 'Error'}
-                </p>
+          {/* Latest Users */}
+          <Card className="admin-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-violet-500" />
+                  <CardTitle className="text-base">Latest Users</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/users')}>
+                  View All <ArrowUpRight className="h-3 w-3 ml-1" />
+                </Button>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${
-                systemStatus.auth === 'operational' ? 'bg-success' :
-                systemStatus.auth === 'warning' ? 'bg-warning' : 'bg-destructive'
-              }`} />
-              <div>
-                <p className="text-sm font-medium">Authentication</p>
-                <p className="text-xs text-muted-foreground">
-                  {systemStatus.auth === 'operational' ? 'All systems normal' :
-                   systemStatus.auth === 'warning' ? 'Minor issues' : 'Service disrupted'}
-                </p>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {data?.users.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">No users yet</p>
+              ) : (
+                data?.users.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <p className="text-sm font-medium truncate">{u.name}</p>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {u.is_banned && <Badge variant="destructive" className="text-xs">Banned</Badge>}
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(u.created_at)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Latest Communities */}
+          <Card className="admin-shadow">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-emerald-500" />
+                  <CardTitle className="text-base">Latest Communities</CardTitle>
+                </div>
+                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => navigate('/admin/communities')}>
+                  View All <ArrowUpRight className="h-3 w-3 ml-1" />
+                </Button>
               </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className={`w-3 h-3 rounded-full ${
-                systemStatus.storage === 'operational' ? 'bg-success' :
-                systemStatus.storage === 'warning' ? 'bg-warning' : 'bg-destructive'
-              }`} />
-              <div>
-                <p className="text-sm font-medium">Storage</p>
-                <p className="text-xs text-muted-foreground">
-                  {systemStatus.storage === 'operational' ? 'Available' :
-                   systemStatus.storage === 'warning' ? '85% capacity' : 'Storage error'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {data?.communities.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-3">No communities yet</p>
+              ) : (
+                data?.communities.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{c.city}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">{timeAgo(c.created_at)}</span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+        </div>
+      </section>
+
+      {/* ── Creation Modals ───────────────────────────────────────── */}
+      <EventModal
+        isOpen={openModal === 'event'}
+        onClose={() => setOpenModal(null)}
+        onSuccess={handleModalSuccess}
+      />
+      <CommunityModal
+        isOpen={openModal === 'community'}
+        onClose={() => setOpenModal(null)}
+        onSuccess={handleModalSuccess}
+      />
+      <UserModal
+        isOpen={openModal === 'user'}
+        onClose={() => setOpenModal(null)}
+        onSuccess={handleModalSuccess}
+      />
+      <DiscussionModal
+        isOpen={openModal === 'discussion'}
+        onClose={() => setOpenModal(null)}
+        onSuccess={handleModalSuccess}
+      />
     </div>
   );
 }

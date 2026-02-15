@@ -108,7 +108,7 @@ export default function CommunityDetailsPage() {
 
       if (error) throw error;
 
-      // Load recent events
+      // Load recent events (excluding parent templates)
       const { data: recentEvents } = await supabase
         .from('events')
         .select(`
