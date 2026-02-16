@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -14,6 +14,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import { logAdminAction } from '@/lib/admin-audit';
+import { AdminActions, AdminTargets } from '@/lib/admin-events';
 import { format, addDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -106,6 +108,14 @@ export function DiscussionModal({ isOpen, onClose, onSuccess, discussion }: Disc
 
         if (error) throw error;
 
+        logAdminAction({
+          action: AdminActions.DISCUSSION_UPDATE,
+          targetType: AdminTargets.DISCUSSION,
+          targetId: discussion.id,
+          previousState: { title: discussion.title, is_visible: discussion.is_visible },
+          newState: { title: data.title, is_visible: data.is_visible },
+        });
+
         toast({
           title: "Discussion Updated",
           description: `${data.title} has been updated successfully.`,
@@ -122,7 +132,7 @@ export function DiscussionModal({ isOpen, onClose, onSuccess, discussion }: Disc
           return;
         }
 
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('discussions')
           .insert([{
             title: discussionData.title,
@@ -132,9 +142,18 @@ export function DiscussionModal({ isOpen, onClose, onSuccess, discussion }: Disc
             is_visible: discussionData.is_visible,
             extended: discussionData.extended,
             created_by: user.id,
-          }]);
+          }])
+          .select('id')
+          .single();
 
         if (error) throw error;
+
+        logAdminAction({
+          action: AdminActions.DISCUSSION_CREATE,
+          targetType: AdminTargets.DISCUSSION,
+          targetId: inserted?.id ?? 'unknown',
+          newState: { title: data.title, community_id: data.community_id },
+        });
 
         toast({
           title: "Discussion Created",

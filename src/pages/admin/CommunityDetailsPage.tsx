@@ -1,17 +1,15 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import {
   ArrowLeft,
   Users,
   Calendar,
   MessageSquare,
   MapPin,
-  User,
   Edit,
   Trash2,
   Globe,
@@ -138,15 +136,15 @@ export default function CommunityDetailsPage() {
       const transformedCommunity: Community = {
         id: data.id,
         name: data.name,
-        description: data.description,
+        description: data.description ?? undefined,
         city: data.city,
         state: undefined,
         country: undefined,
-        image_url: data.image_url,
+        image_url: data.image_url ?? undefined,
         created_by: 'unknown',
         created_at: data.created_at,
         updated_at: data.updated_at,
-        creator: Array.isArray(data.creator) ? data.creator[0] : data.creator,
+        creator: Array.isArray(data.creator) ? data.creator[0] : data.creator as any,
         member_count: data.member_count?.[0]?.count || 0,
         event_count: data.event_count?.[0]?.count || 0,
         discussion_count: data.discussion_count?.[0]?.count || 0,

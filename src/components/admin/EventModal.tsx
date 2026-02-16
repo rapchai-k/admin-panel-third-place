@@ -22,6 +22,8 @@ import { format } from 'date-fns';
 import { FileUpload } from '@/components/ui/file-upload';
 import { cn } from '@/lib/utils';
 import { generateRecurrenceDates, buildChildEvents, type RecurrencePattern, type RecurrenceEndType } from '@/lib/recurrence';
+import { logAdminAction } from '@/lib/admin-audit';
+import { AdminActions, AdminTargets } from '@/lib/admin-events';
 
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
@@ -109,7 +111,6 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
   });
 
   const isReadOnly = isEditing && event?.is_cancelled === true;
-  const isChildEvent = isEditing && !!event?.parent_event_id;
   const isPartOfSeries = isEditing && (!!event?.parent_event_id || !!event?.is_recurring_parent);
   const [applyToAll, setApplyToAll] = useState(false);
 
@@ -258,6 +259,15 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           }
         }
 
+        logAdminAction({
+          action: AdminActions.EVENT_UPDATE,
+          targetType: AdminTargets.EVENT,
+          targetId: event.id,
+          previousState: { title: event.title, venue: event.venue, capacity: event.capacity },
+          newState: { title: data.title, venue: data.venue, capacity: data.capacity },
+          metadata: applyToAll && isPartOfSeries ? { appliedToSeries: true } : undefined,
+        });
+
         toast({
           title: "Event Updated",
           description: applyToAll && isPartOfSeries
@@ -346,13 +356,21 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           }
         }
 
+        logAdminAction({
+          action: AdminActions.EVENT_CREATE,
+          targetType: AdminTargets.EVENT,
+          targetId: parentData.id,
+          newState: { title: data.title, instances: dates.length },
+          metadata: { recurring: true, pattern: recurrencePattern },
+        });
+
         toast({
           title: "Recurring Event Created",
           description: `${data.title} — ${dates.length} instances created successfully.`,
         });
       } else {
         // ── Single (non-recurring) event ──
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('events')
           .insert([{
             title: eventData.title,
@@ -365,9 +383,18 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
             external_link: eventData.external_link || null,
             community_id: eventData.community_id,
             host_id: eventData.host_id,
-          }]);
+          }])
+          .select('id')
+          .single();
 
         if (error) throw error;
+
+        logAdminAction({
+          action: AdminActions.EVENT_CREATE,
+          targetType: AdminTargets.EVENT,
+          targetId: inserted?.id ?? 'unknown',
+          newState: { title: data.title, venue: data.venue },
+        });
 
         toast({
           title: "Event Created",

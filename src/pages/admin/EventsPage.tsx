@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -62,7 +62,7 @@ const createColumns = (formatCurrency: (value: number, code?: string) => string)
     key: 'title',
     header: 'Event',
     sortable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10">
           <AvatarImage
@@ -120,7 +120,7 @@ const createColumns = (formatCurrency: (value: number, code?: string) => string)
     header: 'Community',
     sortable: true,
     filterable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
         <MapPin className="h-4 w-4 text-muted-foreground" />
         <div>
@@ -133,7 +133,7 @@ const createColumns = (formatCurrency: (value: number, code?: string) => string)
   {
     key: 'host',
     header: 'Host',
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
         {row.host ? (
           <>
@@ -170,12 +170,12 @@ const createColumns = (formatCurrency: (value: number, code?: string) => string)
     key: 'price',
     header: 'Price',
     sortable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
 
         <span>
-          {value && value > 0
-            ? formatCurrency(Number(value))
+          {row.price && row.price > 0
+            ? formatCurrency(Number(row.price))
             : 'Free'
           }
         </span>
@@ -245,7 +245,7 @@ export default function EventsPage() {
         registration_count: event.registration_count?.[0]?.count || 0,
       })) || [];
 
-      setEvents(transformedData);
+      setEvents(transformedData as Event[]);
     } catch (error) {
       console.error('Error loading events:', error);
       toast({

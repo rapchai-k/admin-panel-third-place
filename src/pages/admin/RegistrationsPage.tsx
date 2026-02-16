@@ -52,7 +52,7 @@ const columns: Column<Registration>[] = [
     key: 'user',
     header: 'User',
     sortable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-3">
         <Avatar className="h-8 w-8">
           <AvatarImage src={row.user.photo_url} />
@@ -69,7 +69,7 @@ const columns: Column<Registration>[] = [
     header: 'Event',
     sortable: true,
     filterable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-3">
         <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
           <Calendar className="h-4 w-4 text-primary" />
@@ -88,7 +88,7 @@ const columns: Column<Registration>[] = [
     key: 'event',
     header: 'Event Date',
     sortable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
         <Clock className="h-4 w-4 text-muted-foreground" />
         <div>
@@ -114,13 +114,13 @@ const columns: Column<Registration>[] = [
     sortable: true,
     filterable: true,
     render: (value) => {
-      const variants = {
-        pending: 'outline' as const,
-        success: 'default' as const,
-        failed: 'destructive' as const,
-        cancelled: 'destructive' as const,
+      const variants: Record<string, 'outline' | 'default' | 'destructive'> = {
+        pending: 'outline',
+        success: 'default',
+        failed: 'destructive',
+        cancelled: 'destructive',
       };
-      return <Badge variant={variants[value]}>{value.charAt(0).toUpperCase() + value.slice(1)}</Badge>;
+      return <Badge variant={variants[value as string] || 'outline'}>{String(value).charAt(0).toUpperCase() + String(value).slice(1)}</Badge>;
     },
   },
   {
@@ -231,16 +231,17 @@ export default function RegistrationsPage() {
           // Compute payment display status for filtering
           let paymentDisplayStatus = 'free';
           const eventPrice = reg.event?.price || 0;
+          const ps = reg.payment_session as any;
           if (eventPrice > 0) {
-            if (!reg.payment_session) {
+            if (!ps) {
               paymentDisplayStatus = 'pending';
-            } else if (reg.payment_session.payment_status === 'paid') {
+            } else if (ps.payment_status === 'paid') {
               paymentDisplayStatus = 'paid';
-            } else if (reg.payment_session.payment_status === 'yet_to_pay') {
-              paymentDisplayStatus = new Date(reg.payment_session.expires_at) < new Date()
+            } else if (ps.payment_status === 'yet_to_pay') {
+              paymentDisplayStatus = new Date(ps.expires_at) < new Date()
                 ? 'expired' : 'yet_to_pay';
             } else {
-              paymentDisplayStatus = reg.payment_session.payment_status || 'unknown';
+              paymentDisplayStatus = ps.payment_status || 'unknown';
             }
           }
 
@@ -255,7 +256,7 @@ export default function RegistrationsPage() {
         })
       );
 
-      setRegistrations(registrationsWithEmails);
+      setRegistrations(registrationsWithEmails as Registration[]);
     } catch (error) {
       console.error('Error loading registrations:', error);
       toast({

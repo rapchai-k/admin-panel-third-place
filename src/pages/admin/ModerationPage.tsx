@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DataTable, Column } from '@/components/admin/DataTable';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Flag, MessageSquare, User, Clock, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { FlagDetailsModal } from '@/components/admin/FlagDetailsModal';
+import { logAdminAction } from '@/lib/admin-audit';
+import { AdminActions, AdminTargets } from '@/lib/admin-events';
 
 interface Flag {
   id: string;
@@ -72,7 +73,7 @@ const columns: Column<Flag>[] = [
     key: 'flagged_user',
     header: 'Flagged User',
     sortable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
         <Avatar className="h-8 w-8">
           <AvatarImage src={row.flagged_user.photo_url} />
@@ -87,7 +88,7 @@ const columns: Column<Flag>[] = [
   {
     key: 'flagged_by',
     header: 'Reported By',
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
         <Avatar className="h-6 w-6">
           <AvatarImage src={row.flagged_by.photo_url} />
@@ -102,7 +103,7 @@ const columns: Column<Flag>[] = [
   {
     key: 'comment',
     header: 'Content',
-    render: (value, row) => (
+    render: (_value, row) => (
       <div>
         {row.comment ? (
           <div className="space-y-1">
@@ -179,10 +180,10 @@ export default function ModerationPage() {
 
       const transformedData = flagsData?.map(flag => ({
         ...flag,
-        comment: flag.comment?.[0] || null,
+        comment: (flag.comment as any)?.[0] || null,
       })) || [];
 
-      setFlags(transformedData);
+      setFlags(transformedData as Flag[]);
     } catch (error) {
       console.error('Error loading flags:', error);
       toast({
@@ -199,7 +200,7 @@ export default function ModerationPage() {
     try {
       const { error } = await supabase
         .from('flags')
-        .update({ 
+        .update({
           status: 'resolved',
           resolved_at: new Date().toISOString(),
           resolved_by: (await supabase.auth.getUser()).data.user?.id
@@ -208,11 +209,19 @@ export default function ModerationPage() {
 
       if (error) throw error;
 
+      logAdminAction({
+        action: AdminActions.FLAG_RESOLVE,
+        targetType: AdminTargets.FLAG,
+        targetId: flag.id,
+        previousState: { status: flag.status },
+        newState: { status: 'resolved' },
+      });
+
       toast({
         title: "Flag Resolved",
         description: `Flag has been resolved successfully.`,
       });
-      
+
       loadFlags();
     } catch (error) {
       console.error('Error resolving flag:', error);
@@ -228,7 +237,7 @@ export default function ModerationPage() {
     try {
       const { error } = await supabase
         .from('flags')
-        .update({ 
+        .update({
           status: 'resolved',
           resolved_at: new Date().toISOString(),
           resolved_by: (await supabase.auth.getUser()).data.user?.id
@@ -237,16 +246,25 @@ export default function ModerationPage() {
 
       if (error) throw error;
 
+      logAdminAction({
+        action: AdminActions.FLAG_DISMISS,
+        targetType: AdminTargets.FLAG,
+        targetId: flag.id,
+        previousState: { status: flag.status },
+        newState: { status: 'resolved' },
+        metadata: { dismissed: true },
+      });
+
       toast({
         title: "Flag Dismissed",
         description: `Flag has been dismissed successfully.`,
       });
-      
+
       loadFlags();
     } catch (error) {
       console.error('Error dismissing flag:', error);
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Failed to dismiss flag.",
         variant: "destructive",
       });
@@ -277,12 +295,20 @@ export default function ModerationPage() {
 
       if (error) throw error;
 
+      logAdminAction({
+        action: AdminActions.FLAG_URGENT,
+        targetType: AdminTargets.FLAG,
+        targetId: flag.id,
+        previousState: { status: flag.status },
+        newState: { status: 'urgent' },
+      });
+
       toast({
         title: "Flag Marked Urgent",
         description: `Flag has been marked as urgent.`,
         variant: "destructive",
       });
-      
+
       loadFlags();
     } catch (error) {
       console.error('Error marking flag urgent:', error);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,7 @@ interface User {
   created_at: string;
   updated_at: string;
   referral_code?: string;
-  referred_by?: string;
+  referred_by?: string | null;
   community_count?: number;
   event_count?: number;
   badge_count?: number;
@@ -190,61 +190,30 @@ export default function UsersPage() {
   const loadUsers = async () => {
     try {
       setIsLoading(true);
-      console.log('Loading users...');
 
-      // First get basic user data
-      const { data: usersData, error: usersError } = await supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Single RPC replaces N+1 queries (1 base query + 4 per user)
+      const { data, error } = await supabase.rpc('get_users_with_counts');
 
-      if (usersError) {
-        console.error('Users query error:', usersError);
-        throw usersError;
+      if (error) {
+        console.error('get_users_with_counts error:', error);
+        throw error;
       }
 
-      console.log('Users data:', usersData);
-
-      // Get counts and email separately to avoid complex joins
-      const usersWithCounts = await Promise.all(
-        (usersData || []).map(async (user) => {
-          try {
-            const [communityResult, eventResult, badgeResult, emailResult] = await Promise.all([
-              supabase
-                .from('community_members')
-                .select('user_id')
-                .eq('user_id', user.id),
-              supabase
-                .from('event_registrations')
-                .select('user_id')
-                .eq('user_id', user.id),
-              supabase
-                .from('user_badges')
-                .select('user_id')
-                .eq('user_id', user.id),
-              // Fetch email from auth.users using RPC function
-              supabase.rpc('get_user_email', { _user_id: user.id })
-            ]);
-
-            return {
-              ...user,
-              email: emailResult.data || undefined,
-              community_count: communityResult.data?.length || 0,
-              event_count: eventResult.data?.length || 0,
-              badge_count: badgeResult.data?.length || 0,
-            };
-          } catch (error) {
-            console.error(`Error loading counts for user ${user.id}:`, error);
-            return {
-              ...user,
-              email: undefined,
-              community_count: 0,
-              event_count: 0,
-              badge_count: 0,
-            };
-          }
-        })
-      );
+      const usersWithCounts: User[] = (data || []).map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        email: row.email || undefined,
+        photo_url: row.photo_url || undefined,
+        role: row.role,
+        is_banned: row.is_banned,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        referral_code: row.referral_code || undefined,
+        referred_by: row.referred_by || undefined,
+        community_count: Number(row.community_count) || 0,
+        event_count: Number(row.event_count) || 0,
+        badge_count: Number(row.badge_count) || 0,
+      }));
 
       setUsers(usersWithCounts);
     } catch (error) {
@@ -305,11 +274,6 @@ export default function UsersPage() {
     },
   ];
 
-  const handleEditUser = (user: User) => {
-    setSelectedUser(user);
-    setIsModalOpen(true);
-  };
-
   const handleCreate = () => {
     setSelectedUser(undefined);
     setIsModalOpen(true);
@@ -359,20 +323,20 @@ export default function UsersPage() {
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
         user={detailsUser}
-        onEdit={(u) => { 
+        onEdit={(u) => {
           // Convert UserSummary to User by adding missing updated_at field
-          const userForEdit = { ...u, updated_at: new Date().toISOString() };
-          setSelectedUser(userForEdit); 
-          setIsModalOpen(true); 
+          const userForEdit: User = { ...u, updated_at: new Date().toISOString() };
+          setSelectedUser(userForEdit);
+          setIsModalOpen(true);
         }}
         onPromote={(u) => {
           // Convert UserSummary to User by adding missing updated_at field
-          const userForPromotion = { ...u, updated_at: new Date().toISOString() };
+          const userForPromotion: User = { ...u, updated_at: new Date().toISOString() };
           handlePromoteUser(userForPromotion);
         }}
         onBan={(u) => {
-          // Convert UserSummary to User by adding missing updated_at field  
-          const userForBan = { ...u, updated_at: new Date().toISOString() };
+          // Convert UserSummary to User by adding missing updated_at field
+          const userForBan: User = { ...u, updated_at: new Date().toISOString() };
           handleBanUser(userForBan);
         }}
       />

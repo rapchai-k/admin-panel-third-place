@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +13,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, Crown, Shield, UserCheck, Settings, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { logAdminAction } from '@/lib/admin-audit';
+import { AdminActions, AdminTargets } from '@/lib/admin-events';
 
 interface UserRoleModalProps {
   isOpen: boolean;
@@ -95,14 +96,33 @@ export function UserRoleModal({ isOpen, onClose, role, onSave }: UserRoleModalPr
           .eq('id', role.id);
 
         if (error) throw error;
+
+        logAdminAction({
+          action: AdminActions.ROLE_UPDATE,
+          targetType: AdminTargets.ROLE,
+          targetId: role.id,
+          previousState: { role: role.role, is_active: role.is_active },
+          newState: { role: data.role, is_active: data.is_active },
+        });
+
         toast({ title: 'Role updated successfully' });
       } else {
         // Create new role
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('user_roles')
-          .insert(payload as any);
+          .insert(payload as any)
+          .select('id')
+          .single();
 
         if (error) throw error;
+
+        logAdminAction({
+          action: AdminActions.ROLE_ASSIGN,
+          targetType: AdminTargets.ROLE,
+          targetId: inserted?.id ?? 'unknown',
+          newState: { user_id: data.user_id, role: data.role },
+        });
+
         toast({ title: 'Role assigned successfully' });
       }
 

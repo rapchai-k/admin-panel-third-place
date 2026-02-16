@@ -1,29 +1,23 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Separator } from '@/components/ui/separator';
 import { DataTable } from '@/components/admin/DataTable';
 import { UserRoleModal } from '@/components/admin/UserRoleModal';
 import { BulkOperationModal } from '@/components/admin/BulkOperationModal';
 import { PermissionModal } from '@/components/admin/PermissionModal';
 import { toast } from '@/components/ui/use-toast';
-import { 
-  Users, 
-  UserCheck, 
-  Shield, 
-  Settings, 
-  Clock,
-  CheckCircle,
-  XCircle,
-  AlertTriangle,
+import {
+  Users,
+  UserCheck,
+  Shield,
+  Settings,
   Zap,
   UserPlus,
-  UserMinus,
   Crown,
   Key
 } from 'lucide-react';
@@ -164,29 +158,6 @@ export default function AdvancedUserManagementPage() {
     }
   });
 
-  // Role management mutations
-  const updateRoleMutation = useMutation({
-    mutationFn: async ({ roleId, updates }: { roleId: string; updates: Partial<UserRole> }) => {
-      const { error } = await supabase
-        .from('user_roles')
-        .update(updates as any)
-        .eq('id', roleId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-roles'] });
-      toast({ title: 'Role updated successfully' });
-    },
-    onError: (error) => {
-      toast({ 
-        title: 'Failed to update role', 
-        description: error.message,
-        variant: 'destructive' 
-      });
-    }
-  });
-
   const deleteRoleMutation = useMutation({
     mutationFn: async (roleId: string) => {
       const { error } = await supabase
@@ -233,7 +204,7 @@ export default function AdvancedUserManagementPage() {
   });
 
   // Calculate statistics
-  const roleStats = userRoles?.reduce((acc, role) => {
+  const roleStats = userRoles?.reduce((acc: Record<string, number>, role: UserRole) => {
     acc[role.role] = (acc[role.role] || 0) + 1;
     return acc;
   }, {} as Record<string, number>) || {};
@@ -243,8 +214,8 @@ export default function AdvancedUserManagementPage() {
     return acc;
   }, {} as Record<string, number>) || {};
 
-  const activeRoles = userRoles?.filter(role => role.is_active).length || 0;
-  const expiredRoles = userRoles?.filter(role => 
+  const activeRoles = userRoles?.filter((role: UserRole) => role.is_active).length || 0;
+  const expiredRoles = userRoles?.filter((role: UserRole) =>
     role.expires_at && new Date(role.expires_at) < new Date()
   ).length || 0;
 

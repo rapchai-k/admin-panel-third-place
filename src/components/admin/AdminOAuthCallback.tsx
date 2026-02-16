@@ -38,7 +38,7 @@ export function AdminOAuthCallback() {
           if (accessToken) {
             const { error } = await supabase.auth.setSession({
               access_token: accessToken,
-              refresh_token: refreshToken,
+              refresh_token: refreshToken!,
             });
             if (error) {
               console.error('Set session from hash error:', error);

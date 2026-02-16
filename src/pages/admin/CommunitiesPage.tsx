@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Plus, MapPin, Users, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,7 +41,7 @@ const columns: Column<Community>[] = [
     key: 'name',
     header: 'Community',
     sortable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10">
           <AvatarImage
@@ -140,7 +139,7 @@ export default function CommunitiesPage() {
         event_count: community.event_count?.[0]?.count || 0,
       })) || [];
 
-      setCommunities(transformedData);
+      setCommunities(transformedData as Community[]);
     } catch (error) {
       console.error('Error loading communities:', error);
       toast({
@@ -151,11 +150,6 @@ export default function CommunitiesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleEdit = (community: Community) => {
-    setSelectedCommunity(community);
-    setIsModalOpen(true);
   };
 
   const handleCreate = () => {

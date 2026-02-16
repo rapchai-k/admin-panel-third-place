@@ -67,6 +67,50 @@ export type Database = {
           },
         ]
       }
+      admin_audit_log: {
+        Row: {
+          id: string
+          admin_user_id: string
+          action: string
+          target_type: string
+          target_id: string
+          previous_state: Json | null
+          new_state: Json | null
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          admin_user_id: string
+          action: string
+          target_type: string
+          target_id: string
+          previous_state?: Json | null
+          new_state?: Json | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          admin_user_id?: string
+          action?: string
+          target_type?: string
+          target_id?: string
+          previous_state?: Json | null
+          new_state?: Json | null
+          metadata?: Json | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       communities: {
         Row: {
           city: string
@@ -1081,6 +1125,10 @@ export type Database = {
         Args: { _user_id: string }
         Returns: string
       }
+      get_user_emails: {
+        Args: { _user_ids: string[] }
+        Returns: { user_id: string; email: string }[]
+      }
       get_user_highest_role: {
         Args: { _user_id?: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -1088,6 +1136,24 @@ export type Database = {
       get_user_role: {
         Args: { user_id?: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      get_users_with_counts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          id: string
+          name: string
+          photo_url: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          is_banned: boolean
+          created_at: string
+          updated_at: string
+          referral_code: string | null
+          referred_by: string | null
+          email: string | null
+          community_count: number
+          event_count: number
+          badge_count: number
+        }[]
       }
       has_permission: {
         Args: {
@@ -1264,5 +1330,3 @@ export const Constants = {
     },
   },
 } as const
-A new version of Supabase CLI is available: v2.54.11 (currently installed v2.48.3)
-We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

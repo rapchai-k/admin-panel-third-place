@@ -1,18 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { 
-  ArrowLeft, 
-  MessageSquare, 
-  Eye, 
-  EyeOff, 
-  Clock, 
-  MapPin, 
-  User,
+import {
+  ArrowLeft,
+  MessageSquare,
+  Eye,
+  EyeOff,
+  Clock,
+  MapPin,
   Calendar,
   Edit,
   Trash2
@@ -93,15 +92,15 @@ export default function DiscussionDetailsPage() {
         .eq('discussion_id', discussionId)
         .order('created_at', { ascending: true });
 
-      const transformedDiscussion: Discussion = {
+      const transformedDiscussion = {
         ...data,
         comments: commentsData?.map(comment => ({
           id: comment.id,
           content: 'Comment content not available', // Placeholder since content column doesn't exist
           created_at: comment.created_at,
-          user: comment.user,
+          user: comment.user as Comment['user'],
         })) || [],
-      };
+      } as Discussion;
 
       setDiscussion(transformedDiscussion);
     } catch (error) {

@@ -4,7 +4,6 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
-import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
@@ -27,8 +26,18 @@ import ModerationPage from "@/pages/admin/ModerationPage";
 import AnalyticsPage from "@/pages/admin/AnalyticsPage";
 import AdvancedUserManagementPage from "@/pages/admin/AdvancedUserManagementPage";
 import SystemSettingsPage from "@/pages/admin/SystemSettingsPage";
+import EmailTemplatesPage from "@/pages/admin/EmailTemplatesPage";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,        // 30 s before data is considered stale
+      gcTime: 300_000,           // 5 min garbage-collection window
+      retry: 1,                  // single retry on failure
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 import { CurrencyProvider } from '@/context/CurrencyProvider';
 
@@ -68,6 +77,7 @@ const App = () => (
                     <Route path="moderation" element={<ModerationPage />} />
                     <Route path="analytics" element={<AnalyticsPage />} />
                     <Route path="advanced-users" element={<AdvancedUserManagementPage />} />
+                    <Route path="email-templates" element={<EmailTemplatesPage />} />
                     <Route path="settings" element={<SystemSettingsPage />} />
                   </Route>
 

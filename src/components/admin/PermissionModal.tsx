@@ -6,7 +6,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +13,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { CalendarIcon, Key, Database, FileText, Settings, Users, Shield } from 'lucide-react';
 import { format } from 'date-fns';
+import { logAdminAction } from '@/lib/admin-audit';
+import { AdminActions, AdminTargets } from '@/lib/admin-events';
 
 interface PermissionModalProps {
   isOpen: boolean;
@@ -184,14 +185,33 @@ export function PermissionModal({ isOpen, onClose, permission, onSave }: Permiss
           .eq('id', permission.id);
 
         if (error) throw error;
+
+        logAdminAction({
+          action: AdminActions.PERMISSION_UPDATE,
+          targetType: AdminTargets.PERMISSION,
+          targetId: permission.id,
+          previousState: { permission_type: permission.permission_type, is_active: permission.is_active },
+          newState: { permission_type: data.permission_type, is_active: data.is_active },
+        });
+
         toast({ title: 'Permission updated successfully' });
       } else {
         // Create new permission
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('user_permissions')
-          .insert(payload);
+          .insert(payload)
+          .select('id')
+          .single();
 
         if (error) throw error;
+
+        logAdminAction({
+          action: AdminActions.PERMISSION_GRANT,
+          targetType: AdminTargets.PERMISSION,
+          targetId: inserted?.id ?? 'unknown',
+          newState: { user_id: data.user_id, permission_type: data.permission_type },
+        });
+
         toast({ title: 'Permission granted successfully' });
       }
 

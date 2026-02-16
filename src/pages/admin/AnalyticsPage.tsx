@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -743,7 +743,7 @@ export default function AnalyticsPage() {
                           outerRadius={100}
                           paddingAngle={3}
                           dataKey="value"
-                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         >
                           {analytics.paymentStatusDistribution.map((entry, index) => (
                             <Cell key={`ps-cell-${index}`} fill={entry.color} />

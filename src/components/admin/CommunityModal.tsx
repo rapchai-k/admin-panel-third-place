@@ -11,6 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { FileUpload } from '@/components/ui/file-upload';
 import { Loader2 } from 'lucide-react';
+import { logAdminAction } from '@/lib/admin-audit';
+import { AdminActions, AdminTargets } from '@/lib/admin-events';
 
 const communitySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
@@ -72,21 +74,38 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
 
         if (error) throw error;
 
+        logAdminAction({
+          action: AdminActions.COMMUNITY_UPDATE,
+          targetType: AdminTargets.COMMUNITY,
+          targetId: community.id,
+          previousState: { name: community.name, city: community.city, description: community.description, image_url: community.image_url },
+          newState: { name: data.name, city: data.city, description: data.description, image_url: data.image_url },
+        });
+
         toast({
           title: "Community Updated",
           description: `${data.name} has been updated successfully.`,
         });
       } else {
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('communities')
           .insert([{
             name: data.name,
             city: data.city,
             description: data.description || null,
             image_url: data.image_url || null,
-          }]);
+          }])
+          .select('id')
+          .single();
 
         if (error) throw error;
+
+        logAdminAction({
+          action: AdminActions.COMMUNITY_CREATE,
+          targetType: AdminTargets.COMMUNITY,
+          targetId: inserted?.id ?? 'unknown',
+          newState: { name: data.name, city: data.city },
+        });
 
         toast({
           title: "Community Created",

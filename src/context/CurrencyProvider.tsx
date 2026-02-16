@@ -17,7 +17,7 @@ interface CurrencyContextType {
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
 export const CurrencyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, setState] = useState<CurrencyState>({ code: 'INR' });
+  const [, setState] = useState<CurrencyState>({ code: 'INR' });
   const [isLoading] = useState(false);
 
   // Currency selection is removed; keep empty list for compatibility

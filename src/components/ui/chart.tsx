@@ -5,14 +5,6 @@ import { cn } from "@/lib/utils"
 // Chart context
 const ChartContext = React.createContext<{} | null>(null)
 
-function useChart() {
-  const context = React.useContext(ChartContext)
-  if (!context) {
-    throw new Error("useChart must be used within a <ChartContainer />")
-  }
-  return context
-}
-
 const ChartContainer = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
@@ -97,10 +89,9 @@ const ChartTooltipContent = React.forwardRef<
       }
 
       const [item] = payload
-      const key = `${labelKey || item.dataKey || item.name || "value"}`
-      const itemConfig = {}
+      const labelKey_ = `${labelKey || item.dataKey || item.name || "value"}`
       const formattedLabel =
-        labelFormatter?.(label, payload) || `${key}`
+        labelFormatter?.(label, payload) || `${labelKey_}`
 
       return (
         <div className={cn("font-medium", labelClassName)}>
@@ -133,7 +124,6 @@ const ChartTooltipContent = React.forwardRef<
         <div className="grid gap-1.5">
           {payload.map((item: any, index: number) => {
             const key = `${nameKey || item.name || item.dataKey || "value"}`
-            const itemConfig = {}
             const indicatorColor = color || item.payload?.fill || item.color
 
             return (
@@ -237,8 +227,6 @@ const ChartLegendContent = React.forwardRef<
         {...props}
       >
         {payload.map((item: any, index: number) => {
-          const key = `${nameKey || item.dataKey || "value"}`
-
           return (
             <div
               key={item.value || index}

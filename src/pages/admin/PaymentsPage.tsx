@@ -3,7 +3,7 @@ import { DataTable, Column } from '@/components/admin/DataTable';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { CreditCard, Clock, Calendar, MapPin } from 'lucide-react';
+import { Clock, Calendar, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useCurrency } from '@/context/CurrencyProvider';
@@ -195,21 +195,21 @@ export default function PaymentsPage() {
       const eventIds = [...new Set(sessions.map(s => s.event_id))];
 
       // 3. Batch-fetch users, events (with community), and emails in parallel
-      const [usersResult, eventsResult, ...emailResults] = await Promise.all([
+      const [usersResult, eventsResult, emailsResult] = await Promise.all([
         supabase.from('users').select('id, name, photo_url').in('id', userIds),
         supabase.from('events').select('id, title, date_time, venue, community:communities(name)').in('id', eventIds),
-        ...userIds.map(uid => supabase.rpc('get_user_email', { _user_id: uid })),
+        supabase.rpc('get_user_emails', { _user_ids: userIds }),
       ]);
 
       // Build lookup maps
       const userMap = new Map<string, { name: string; photo_url?: string; email?: string }>();
-      (usersResult.data || []).forEach((u, _i) => {
+      (usersResult.data || []).forEach((u) => {
         userMap.set(u.id, { name: u.name, photo_url: u.photo_url ?? undefined });
       });
-      // Attach emails
-      userIds.forEach((uid, i) => {
-        const existing = userMap.get(uid);
-        if (existing) existing.email = emailResults[i]?.data || undefined;
+      // Attach emails from batch RPC result
+      ((emailsResult.data as any[]) || []).forEach((row: { user_id: string; email: string }) => {
+        const existing = userMap.get(row.user_id);
+        if (existing) existing.email = row.email || undefined;
       });
 
       const eventMap = new Map<string, { title: string; date_time: string | null; venue: string; community: { name: string } | null }>();

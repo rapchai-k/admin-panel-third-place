@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Plus, MessageSquare, Eye, EyeOff, Clock, MapPin, User } from 'lucide-react';
+import { Plus, MessageSquare, Eye, EyeOff, Clock, MapPin } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { DiscussionModal } from '@/components/admin/DiscussionModal';
@@ -36,7 +36,7 @@ const columns: Column<Discussion>[] = [
     key: 'title',
     header: 'Discussion',
     sortable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
           <MessageSquare className="h-5 w-5 text-primary" />
@@ -55,7 +55,7 @@ const columns: Column<Discussion>[] = [
     header: 'Community',
     sortable: true,
     filterable: true,
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
         <MapPin className="h-4 w-4 text-muted-foreground" />
         <div>
@@ -68,7 +68,7 @@ const columns: Column<Discussion>[] = [
   {
     key: 'creator',
     header: 'Created By',
-    render: (value, row) => (
+    render: (_value, row) => (
       <div className="flex items-center gap-2">
         <Avatar className="h-6 w-6">
           <AvatarImage src={row.creator.photo_url} />
@@ -180,7 +180,7 @@ export default function DiscussionsPage() {
         comment_count: discussion.comment_count?.[0]?.count || 0,
       })) || [];
 
-      setDiscussions(transformedData);
+      setDiscussions(transformedData as Discussion[]);
     } catch (error) {
       console.error('Error loading discussions:', error);
       toast({

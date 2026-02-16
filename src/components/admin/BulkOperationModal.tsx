@@ -1,6 +1,5 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
-import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -11,20 +10,17 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { toast } from '@/components/ui/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
-import { 
-  Zap, 
-  Users, 
-  UserPlus, 
-  UserMinus, 
-  Ban, 
-  Mail, 
+import {
+  Zap,
+  Users,
+  UserPlus,
+  Ban,
+  Mail,
   Shield,
   Download,
   Upload,
   Crown,
-  Settings
 } from 'lucide-react';
 
 interface BulkOperationModalProps {
@@ -195,7 +191,7 @@ export function BulkOperationModal({ isOpen, onClose, operation, onSave }: BulkO
       
       const payload = {
         operation_type: data.operation_type,
-        initiated_by: currentUser.data.user?.id,
+        initiated_by: currentUser.data.user?.id ?? '',
         target_count: previewCount,
         operation_data: {
           target_criteria: data.target_criteria,

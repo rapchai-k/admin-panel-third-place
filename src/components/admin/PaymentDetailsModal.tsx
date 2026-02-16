@@ -1,4 +1,4 @@
-import React from 'react';
+// PaymentDetailsModal
 import {
   Dialog,
   DialogContent,

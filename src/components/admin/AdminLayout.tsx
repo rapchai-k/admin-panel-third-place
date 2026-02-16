@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,7 @@ import {
   TrendingUp,
   Settings,
   Shield,
+  Mail,
   LogOut,
   User,
   Moon,
@@ -116,6 +117,7 @@ const navigationItems = [
     title: 'Moderation',
     items: [
       { title: 'Flagged Content', url: '/admin/moderation', icon: Flag },
+      { title: 'Email Templates', url: '/admin/email-templates', icon: Mail },
       { title: 'Settings', url: '/admin/settings', icon: Settings },
     ],
   },

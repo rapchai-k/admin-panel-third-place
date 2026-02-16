@@ -43,13 +43,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
                 return;
               }
 
-              const { data: userData, error } = await supabase
-                .from('users')
-                .select('role')
-                .eq('id', session.user.id)
-                .single();
+              const { data: isAdminResult, error } = await supabase
+                .rpc('is_admin', { _user_id: session.user.id });
 
-              if (!error && userData?.role === 'admin') {
+              if (!error && isAdminResult === true) {
                 setIsAdmin(true);
               } else {
                 setIsAdmin(false);

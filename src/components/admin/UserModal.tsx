@@ -12,6 +12,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { FileUpload } from '@/components/ui/file-upload';
+import { logAdminAction } from '@/lib/admin-audit';
+import { AdminActions, AdminTargets } from '@/lib/admin-events';
 
 const userSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
@@ -71,18 +73,36 @@ export function UserModal({ isOpen, onClose, onSuccess, user }: UserModalProps) 
   const onSubmit = async (data: UserFormData) => {
     try {
       if (isEditing) {
+        // Note: role changes should go through the user_roles table
+        // (via AdvancedUserManagement), not via users.role column directly.
         const { error } = await supabase
           .from('users')
           .update({
             name: data.name,
             photo_url: data.photo_url || null,
-            role: data.role,
             is_banned: data.is_banned,
             referral_code: data.referral_code || null,
           })
           .eq('id', user.id);
 
         if (error) throw error;
+
+        // Audit log — fire-and-forget
+        const wasBanned = user.is_banned;
+        const isBanned = data.is_banned;
+        const action = isBanned && !wasBanned
+          ? AdminActions.USER_BAN
+          : !isBanned && wasBanned
+            ? AdminActions.USER_UNBAN
+            : AdminActions.USER_UPDATE;
+
+        logAdminAction({
+          action,
+          targetType: AdminTargets.USER,
+          targetId: user.id,
+          previousState: { name: user.name, photo_url: user.photo_url, is_banned: user.is_banned },
+          newState: { name: data.name, photo_url: data.photo_url, is_banned: data.is_banned },
+        });
 
         toast({
           title: "User Updated",
