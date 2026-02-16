@@ -1,3 +1,10 @@
+# Dependencies
+node_modules
+
+# Build output
+dist
+dist-ssr
+
 # Logs
 logs
 *.log
@@ -7,19 +14,40 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Environment files (keep .env.example as reference)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# Lockfiles from other package managers (project uses npm)
+bun.lockb
+yarn.lock
+pnpm-lock.yaml
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test / coverage
+coverage
+
+# Supabase local data
+supabase/.temp
+
+# Vercel
+.vercel
+
+# TypeScript cache
+*.tsbuildinfo

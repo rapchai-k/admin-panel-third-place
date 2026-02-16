@@ -25,17 +25,16 @@ export function generateShortCode(): string {
 }
 
 /**
- * The consumer-facing base URL.  Defaults to the current origin so that
- * in local dev it "just works", and in production the admin can override
- * via the VITE_CONSUMER_URL env var.
+ * The consumer-facing base URL.  Points to the consumer panel domain.
+ * Can be overridden via the VITE_CONSUMER_URL env var for local dev.
  */
 const CONSUMER_BASE =
   (import.meta.env.VITE_CONSUMER_URL as string | undefined)?.replace(/\/+$/, '') ??
-  window.location.origin;
+  'https://mythirdplace.rapchai.com';
 
 /**
  * Build the full short URL for an event, e.g.
- *   https://mythirdplace.com/e/Xk9mP2qR
+ *   https://mythirdplace.rapchai.com/e/Xk9mP2qR
  */
 export function buildEventShortUrl(shortCode: string): string {
   return `${CONSUMER_BASE}/e/${shortCode}`;
@@ -66,7 +65,7 @@ export function generateSlug(name: string): string {
 
 /**
  * Build the full community URL, e.g.
- *   https://mythirdplace.com/c/rap-hip-hop-and-cool-music
+ *   https://mythirdplace.rapchai.com/c/rap-hip-hop-and-cool-music
  */
 export function buildCommunityUrl(slug: string): string {
   return `${CONSUMER_BASE}/c/${slug}`;
