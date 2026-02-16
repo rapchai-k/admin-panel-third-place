@@ -10,12 +10,16 @@
 # ─────────────────────────────────────────────────────────────
 set -euo pipefail
 
-ENV_FILE="$(git rev-parse --show-toplevel 2>/dev/null)/.env" || ENV_FILE=".env"
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || REPO_ROOT="."
 
-if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-fi
+# Source .env.local first (local dev), fall back to .env (CI/production)
+for _env in "$REPO_ROOT/.env.local" "$REPO_ROOT/.env"; do
+  if [[ -f "$_env" ]]; then
+    # shellcheck disable=SC1090
+    source "$_env"
+    break
+  fi
+done
 
 if [[ -z "${SUPABASE_DB_URL:-}" ]]; then
   echo "ERROR: SUPABASE_DB_URL is not set." >&2

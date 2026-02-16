@@ -13,6 +13,7 @@ import { FileUpload } from '@/components/ui/file-upload';
 import { Loader2 } from 'lucide-react';
 import { logAdminAction } from '@/lib/admin-audit';
 import { AdminActions, AdminTargets } from '@/lib/admin-events';
+import { generateSlug } from '@/lib/short-url';
 
 const communitySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
@@ -67,9 +68,15 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
   const onSubmit = async (data: CommunityFormData) => {
     try {
       if (isEditing) {
+        // Re-generate slug if name changed
+        const updatePayload: Record<string, unknown> = { ...data };
+        if (data.name !== community.name) {
+          updatePayload.slug = generateSlug(data.name);
+        }
+
         const { error } = await supabase
           .from('communities')
-          .update(data)
+          .update(updatePayload)
           .eq('id', community.id);
 
         if (error) throw error;
@@ -87,6 +94,8 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
           description: `${data.name} has been updated successfully.`,
         });
       } else {
+        const slug = generateSlug(data.name);
+
         const { data: inserted, error } = await supabase
           .from('communities')
           .insert([{
@@ -100,11 +109,19 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
 
         if (error) throw error;
 
+        // Generate and save slug after insert (two-step to avoid schema cache issues)
+        if (inserted?.id) {
+          await supabase
+            .from('communities')
+            .update({ slug })
+            .eq('id', inserted.id);
+        }
+
         logAdminAction({
           action: AdminActions.COMMUNITY_CREATE,
           targetType: AdminTargets.COMMUNITY,
           targetId: inserted?.id ?? 'unknown',
-          newState: { name: data.name, city: data.city },
+          newState: { name: data.name, city: data.city, slug },
         });
 
         toast({

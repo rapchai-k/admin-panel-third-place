@@ -18,6 +18,7 @@ interface Community {
   updated_at: string;
   member_count?: number;
   event_count?: number;
+  slug?: string;
 }
 
 // Helpers for null-safe strings and initials

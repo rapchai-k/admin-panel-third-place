@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils';
 import { generateRecurrenceDates, buildChildEvents, type RecurrencePattern, type RecurrenceEndType } from '@/lib/recurrence';
 import { logAdminAction } from '@/lib/admin-audit';
 import { AdminActions, AdminTargets } from '@/lib/admin-events';
+import { generateShortCode, buildEventShortUrl } from '@/lib/short-url';
+import { EventCreatedModal, type CreatedEventInfo } from './EventCreatedModal';
 
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
@@ -93,6 +95,9 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
   const [recurrenceEndDate, setRecurrenceEndDate] = useState<Date | undefined>();
   const [recurrenceCount, setRecurrenceCount] = useState(10);
   const [showPreview, setShowPreview] = useState(false);
+
+  // Success modal state (shown after event creation with short URL)
+  const [createdEventInfo, setCreatedEventInfo] = useState<CreatedEventInfo | null>(null);
 
   const form = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
@@ -325,6 +330,13 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
 
         if (parentError) throw parentError;
 
+        // Generate and save short code after successful insert
+        const parentShortCode = generateShortCode();
+        await supabase
+          .from('events')
+          .update({ short_code: parentShortCode })
+          .eq('id', parentData.id);
+
         // 2. Build and insert child events (2nd date onward, series_index starts at 2)
         const childDates = dates.slice(1);
         if (childDates.length > 0) {
@@ -364,9 +376,15 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           metadata: { recurring: true, pattern: recurrencePattern },
         });
 
-        toast({
-          title: "Recurring Event Created",
-          description: `${data.title} — ${dates.length} instances created successfully.`,
+        // Show success modal with short URL
+        setCreatedEventInfo({
+          id: parentData.id,
+          title: data.title,
+          date_time: dates[0].toISOString(),
+          venue: data.venue,
+          capacity: data.capacity,
+          shortUrl: buildEventShortUrl(parentShortCode),
+          instanceCount: dates.length,
         });
       } else {
         // ── Single (non-recurring) event ──
@@ -389,6 +407,13 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
 
         if (error) throw error;
 
+        // Generate and save short code after successful insert
+        const singleShortCode = generateShortCode();
+        await supabase
+          .from('events')
+          .update({ short_code: singleShortCode })
+          .eq('id', inserted?.id);
+
         logAdminAction({
           action: AdminActions.EVENT_CREATE,
           targetType: AdminTargets.EVENT,
@@ -396,15 +421,19 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           newState: { title: data.title, venue: data.venue },
         });
 
-        toast({
-          title: "Event Created",
-          description: `${data.title} has been created successfully.`,
+        // Show success modal with short URL
+        setCreatedEventInfo({
+          id: inserted?.id ?? 'unknown',
+          title: data.title,
+          date_time: eventData.date_time,
+          venue: data.venue,
+          capacity: data.capacity,
+          shortUrl: buildEventShortUrl(singleShortCode),
         });
       }
 
       form.reset();
       onSuccess();
-      onClose();
     } catch (error) {
       console.error('Error saving event:', error);
       toast({
@@ -421,8 +450,14 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
     onClose();
   };
 
+  const handleCreatedModalClose = () => {
+    setCreatedEventInfo(null);
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <>
+    <Dialog open={isOpen && !createdEventInfo} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -920,5 +955,12 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
         </Form>
       </DialogContent>
     </Dialog>
+
+    <EventCreatedModal
+      isOpen={!!createdEventInfo}
+      onClose={handleCreatedModalClose}
+      event={createdEventInfo}
+    />
+    </>
   );
 }

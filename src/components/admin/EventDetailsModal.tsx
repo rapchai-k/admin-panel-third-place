@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
 import {
   Calendar,
   MapPin,
@@ -17,13 +18,18 @@ import {
   User,
   Building,
   Clock,
-  Repeat
+  Repeat,
+  Link2,
+  Copy,
+  Check,
+  ExternalLink,
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent as AlertContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader as AlertHeader, AlertDialogTitle as AlertTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { EventModal } from './EventModal';
 import { useCurrency } from '@/context/CurrencyProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { buildEventShortUrl } from '@/lib/short-url';
 
 interface Event {
   id: string;
@@ -51,6 +57,7 @@ interface Event {
     photo_url?: string;
   } | null;
   registration_count?: number;
+  short_code?: string;
 }
 
 // Helpers for null-safe strings and initials (local to this file)
@@ -80,9 +87,29 @@ interface EventDetailsModalProps {
 
 export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewRegistrations, onCancel }: EventDetailsModalProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const { formatCurrency } = useCurrency();
   const { toast } = useToast();
+
+  const handleCopyShortUrl = async () => {
+    if (!event?.short_code) return;
+    const url = buildEventShortUrl(event.short_code);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.createElement('input');
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   if (!event) return null;
 
@@ -362,6 +389,48 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
                 })}
               </p>
             </div>
+
+            {/* Shareable Short URL */}
+            {event.short_code && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <Link2 className="h-4 w-4 text-primary" />
+                    Shareable Event Link
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={buildEventShortUrl(event.short_code)}
+                      className="font-mono text-sm bg-background"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <Button
+                      variant={copied ? 'default' : 'outline'}
+                      size="icon"
+                      onClick={handleCopyShortUrl}
+                      title="Copy link"
+                      className="shrink-0"
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => window.open(buildEventShortUrl(event.short_code!), '_blank', 'noopener,noreferrer')}
+                      title="Open in new tab"
+                      className="shrink-0"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {copied && (
+                    <p className="text-xs text-green-600 font-medium">Copied to clipboard!</p>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Series Bulk Operations */}
             {isPartOfSeries && (

@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
-import { MapPin, Users, Calendar as CalendarIcon, Clock, Trash2, Edit, MessageSquare, Loader2 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { MapPin, Users, Calendar as CalendarIcon, Clock, Trash2, Edit, MessageSquare, Loader2, Link2, Copy, Check, ExternalLink } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { CommunityModal } from '@/components/admin/CommunityModal';
+import { buildCommunityUrl } from '@/lib/short-url';
 
 
 interface Community {
@@ -24,6 +26,7 @@ interface Community {
   created_at: string;
   member_count?: number;
   event_count?: number;
+  slug?: string;
 }
 
 interface EventSummary {
@@ -69,6 +72,26 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
   const [isLoading, setIsLoading] = useState(false);
   const [recentEvents, setRecentEvents] = useState<EventSummary[]>([]);
   const [recentDiscussions, setRecentDiscussions] = useState<DiscussionSummary[]>([]);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopySlugUrl = async () => {
+    if (!community?.slug) return;
+    const url = buildCommunityUrl(community.slug);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.createElement('input');
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   useEffect(() => {
     const loadMore = async () => {
@@ -203,6 +226,48 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
                 <p className="mt-1 text-xl font-bold">{community.event_count ?? 0}</p>
               </div>
             </div>
+
+            {/* Shareable Community URL */}
+            {community.slug && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-1.5">
+                    <Link2 className="h-4 w-4 text-primary" />
+                    Shareable Community Link
+                  </label>
+                  <div className="flex gap-2">
+                    <Input
+                      readOnly
+                      value={buildCommunityUrl(community.slug)}
+                      className="font-mono text-sm bg-background"
+                      onClick={(e) => (e.target as HTMLInputElement).select()}
+                    />
+                    <Button
+                      variant={copied ? 'default' : 'outline'}
+                      size="icon"
+                      onClick={handleCopySlugUrl}
+                      title="Copy link"
+                      className="shrink-0"
+                    >
+                      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => window.open(buildCommunityUrl(community.slug!), '_blank', 'noopener,noreferrer')}
+                      title="Open in new tab"
+                      className="shrink-0"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  {copied && (
+                    <p className="text-xs text-green-600 font-medium">Copied to clipboard!</p>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Recent content inside modal to avoid separate view */}
             <div className="grid grid-cols-1 gap-4">

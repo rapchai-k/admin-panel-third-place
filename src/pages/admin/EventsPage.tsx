@@ -39,6 +39,7 @@ interface Event {
     photo_url?: string;
   } | null;
   registration_count?: number;
+  short_code?: string;
 }
 
 // Helpers for null-safe strings and initials

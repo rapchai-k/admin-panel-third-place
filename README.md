@@ -2,8 +2,6 @@
 
 ## Project Overview
 
-**URL**: https://mythirdplace-admin.vercel.app
-
 **MyThirdPlace Admin Panel** is a comprehensive administrative dashboard for managing communities, events, users, and analytics. Built with modern web technologies, it provides a powerful interface for community platform administration.
 
 ## Technology Stack
