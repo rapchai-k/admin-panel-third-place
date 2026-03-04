@@ -22,7 +22,6 @@ interface Community {
   name: string;
   description?: string;
   city: string;
-  image_url?: string;
   created_at: string;
   member_count?: number;
   event_count?: number;
@@ -41,6 +40,20 @@ interface DiscussionSummary {
   title: string;
   created_at: string;
   comment_count?: number;
+}
+
+interface EventSummaryQueryRow {
+  id: string;
+  title: string;
+  date_time: string | null;
+  registration_count?: Array<{ count: number }>;
+}
+
+interface DiscussionSummaryQueryRow {
+  id: string;
+  title: string;
+  created_at: string;
+  comment_count?: Array<{ count: number }>;
 }
 
 interface CommunityDetailsModalProps {
@@ -73,6 +86,7 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
   const [recentEvents, setRecentEvents] = useState<EventSummary[]>([]);
   const [recentDiscussions, setRecentDiscussions] = useState<DiscussionSummary[]>([]);
   const [copied, setCopied] = useState(false);
+  const [headerImageUrl, setHeaderImageUrl] = useState<string | null>(null);
 
   const handleCopySlugUrl = async () => {
     if (!community?.slug) return;
@@ -98,7 +112,7 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
       if (!community?.id || !isOpen) return;
       try {
         setIsLoading(true);
-        const [eventsRes, discussionsRes] = await Promise.all([
+        const [eventsRes, discussionsRes, galleryRes] = await Promise.all([
           supabase
             .from('events')
             .select(`id, title, date_time, registration_count:event_registrations(count)`)
@@ -110,17 +124,24 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
             .select(`id, title, created_at, comment_count:discussion_comments(count)`)
             .eq('community_id', community.id)
             .order('created_at', { ascending: false })
-            .limit(5)
+            .limit(5),
+          supabase
+            .from('gallery_media')
+            .select('media_url, sort_order')
+            .eq('community_id', community.id)
+            .order('sort_order', { ascending: true })
+            .limit(1),
         ]);
 
-        const evts = (eventsRes.data || []).map((e: any) => ({
+        const evts = ((eventsRes.data || []) as EventSummaryQueryRow[]).map((e) => ({
           ...e,
           registration_count: e.registration_count?.[0]?.count || 0,
         }));
-        const discs = (discussionsRes.data || []).map((d: any) => ({
+        const discs = ((discussionsRes.data || []) as DiscussionSummaryQueryRow[]).map((d) => ({
           ...d,
           comment_count: d.comment_count?.[0]?.count || 0,
         }));
+        setHeaderImageUrl(galleryRes.data?.[0]?.media_url || null);
         setRecentEvents(evts);
         setRecentDiscussions(discs);
       } catch (err) {
@@ -185,7 +206,7 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
             <div className="flex items-start gap-4">
               <Avatar className="h-14 w-14">
                 <AvatarImage
-                  src={safeString(community.image_url) || undefined}
+                  src={safeString(headerImageUrl) || undefined}
                   alt={safeString(community.name) || 'Community image'}
                   onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = ''; }}
                 />
@@ -277,7 +298,7 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
                   <span className="font-medium">Recent Events</span>
                 </div>
                 {isLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin"/> Loading…</div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
                 ) : recentEvents.length ? (
                   <ul className="space-y-2 text-sm">
                     {recentEvents.map(evt => (
@@ -298,7 +319,7 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
                   <span className="font-medium">Recent Discussions</span>
                 </div>
                 {isLoading ? (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin"/> Loading…</div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
                 ) : recentDiscussions.length ? (
                   <ul className="space-y-2 text-sm">
                     {recentDiscussions.map(d => (
@@ -338,4 +359,3 @@ export function CommunityDetailsModal({ isOpen, onClose, community, onSuccess }:
     </>
   );
 }
-

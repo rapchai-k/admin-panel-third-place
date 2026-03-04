@@ -26,7 +26,13 @@ import {
 interface BulkOperationModalProps {
   isOpen: boolean;
   onClose: () => void;
-  operation?: any;
+  operation?: {
+    id: string;
+    operation_type?: string;
+    operation_data?: {
+      target_data?: string;
+    };
+  };
   onSave: () => void;
 }
 
@@ -141,7 +147,7 @@ export function BulkOperationModal({ isOpen, onClose, operation, onSave }: BulkO
             const { data: roleUsers } = await supabase
               .from('user_roles')
               .select('user_id')
-              .eq('role', targetData as any)
+              .eq('role', targetData)
               .eq('is_active', true);
             
             if (roleUsers) {
@@ -227,10 +233,11 @@ export function BulkOperationModal({ isOpen, onClose, operation, onSave }: BulkO
 
       onSave();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       toast({
         title: 'Failed to create operation',
-        description: error.message,
+        description: message,
         variant: 'destructive',
       });
     }

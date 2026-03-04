@@ -47,6 +47,11 @@ interface Registration {
   payment_display_status: string;
 }
 
+interface RegistrationPaymentSession {
+  payment_status: string | null;
+  expires_at: string;
+}
+
 const columns: Column<Registration>[] = [
   {
     key: 'user',
@@ -178,7 +183,7 @@ const columns: Column<Registration>[] = [
 export default function RegistrationsPage() {
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedRegistration, setSelectedRegistration] = useState<any>(null);
+  const [selectedRegistration, setSelectedRegistration] = useState<Registration | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const { toast } = useToast();
   const { formatCurrency } = useCurrency();
@@ -231,7 +236,7 @@ export default function RegistrationsPage() {
           // Compute payment display status for filtering
           let paymentDisplayStatus = 'free';
           const eventPrice = reg.event?.price || 0;
-          const ps = reg.payment_session as any;
+          const ps = reg.payment_session as RegistrationPaymentSession | null;
           if (eventPrice > 0) {
             if (!ps) {
               paymentDisplayStatus = 'pending';

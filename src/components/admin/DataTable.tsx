@@ -45,7 +45,7 @@ const safeString = (v: unknown): string => {
 export interface Column<T> {
   key: keyof T;
   header: string;
-  render?: (value: any, row: T) => React.ReactNode;
+  render?: (value: unknown, row: T) => React.ReactNode;
   sortable?: boolean;
   filterable?: boolean;
 }
@@ -71,7 +71,7 @@ export interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
 }
 
-export function DataTable<T extends Record<string, any>>({
+export function DataTable<T extends Record<string, unknown>>({
   data,
   columns,
   title,
@@ -350,4 +350,3 @@ export function DataTable<T extends Record<string, any>>({
     </Card>
   );
 }
-

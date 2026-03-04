@@ -54,29 +54,34 @@ interface ActivityNotification {
   id: string;
   action_type: string;
   target_type: string;
-  metadata: Record<string, any> | null;
+  metadata: Record<string, unknown> | null;
   timestamp: string;
 }
 
 const LAST_READ_KEY = 'admin_notif_last_read';
 
+const metaString = (meta: Record<string, unknown> | null, key: string): string | undefined => {
+  const value = meta?.[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
 function notifLabel(n: ActivityNotification): string {
-  const meta = n.metadata as Record<string, any> | null;
+  const meta = n.metadata as Record<string, unknown> | null;
   switch (n.action_type) {
     case 'user_created':
-      return `New user: ${meta?.name || 'Unknown'}`;
+      return `New user: ${metaString(meta, 'name') || 'Unknown'}`;
     case 'event_created':
-      return `Event created: ${meta?.title || 'Untitled'}`;
+      return `Event created: ${metaString(meta, 'title') || 'Untitled'}`;
     case 'community_created':
-      return `Community created: ${meta?.name || 'Untitled'}`;
+      return `Community created: ${metaString(meta, 'name') || 'Untitled'}`;
     case 'registration_created':
-      return `Registration for ${meta?.event_title || 'an event'}`;
+      return `Registration for ${metaString(meta, 'event_title') || 'an event'}`;
     case 'user_banned':
-      return `User banned: ${meta?.name || 'Unknown'}`;
+      return `User banned: ${metaString(meta, 'name') || 'Unknown'}`;
     case 'user_unbanned':
-      return `User unbanned: ${meta?.name || 'Unknown'}`;
+      return `User unbanned: ${metaString(meta, 'name') || 'Unknown'}`;
     case 'flag_created':
-      return `New flag: ${meta?.reason || 'Content flagged'}`;
+      return `New flag: ${metaString(meta, 'reason') || 'Content flagged'}`;
     default:
       return n.action_type.replace(/_/g, ' ');
   }

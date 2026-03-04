@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,17 +9,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { FileUpload } from '@/components/ui/file-upload';
 import { Loader2 } from 'lucide-react';
 import { logAdminAction } from '@/lib/admin-audit';
 import { AdminActions, AdminTargets } from '@/lib/admin-events';
 import { generateSlug } from '@/lib/short-url';
+import { MultiFileUpload } from '@/components/ui/multi-file-upload';
+import {
+  createEmptyGalleryDraftState,
+  type GalleryDraftState,
+  type GalleryMediaRow,
+  loadGalleryMediaForEntity,
+  syncGalleryMedia,
+} from '@/lib/gallery-media';
 
 const communitySchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name must be less than 100 characters'),
   city: z.string().min(1, 'City is required').max(50, 'City must be less than 50 characters'),
   description: z.string().optional(),
-  image_url: z.string().optional(),
 });
 
 type CommunityFormData = z.infer<typeof communitySchema>;
@@ -29,7 +35,6 @@ interface Community {
   name: string;
   city: string;
   description?: string;
-  image_url?: string;
 }
 
 interface CommunityModalProps {
@@ -42,6 +47,9 @@ interface CommunityModalProps {
 export function CommunityModal({ isOpen, onClose, onSuccess, community }: CommunityModalProps) {
   const { toast } = useToast();
   const isEditing = !!community;
+  const [existingMedia, setExistingMedia] = useState<GalleryMediaRow[]>([]);
+  const [galleryDraft, setGalleryDraft] = useState<GalleryDraftState>(createEmptyGalleryDraftState());
+  const [galleryResetKey, setGalleryResetKey] = useState(0);
 
   const form = useForm<CommunityFormData>({
     resolver: zodResolver(communitySchema),
@@ -49,27 +57,49 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
       name: community?.name || '',
       city: community?.city || '',
       description: community?.description || '',
-      image_url: community?.image_url || '',
     },
   });
 
-  // Reset form values when community data changes
+  const loadCommunityMedia = async (communityId: string) => {
+    const rows = await loadGalleryMediaForEntity('communities', communityId);
+    setExistingMedia(rows);
+    setGalleryResetKey((value) => value + 1);
+  };
+
   React.useEffect(() => {
-    if (isOpen) {
-      form.reset({
-        name: community?.name || '',
-        city: community?.city || '',
-        description: community?.description || '',
-        image_url: community?.image_url || '',
-      });
+    if (!isOpen) return;
+
+    form.reset({
+      name: community?.name || '',
+      city: community?.city || '',
+      description: community?.description || '',
+    });
+
+    setGalleryDraft(createEmptyGalleryDraftState());
+
+    if (community?.id) {
+      void loadCommunityMedia(community.id);
+    } else {
+      setExistingMedia([]);
+      setGalleryResetKey((value) => value + 1);
     }
   }, [community, isOpen, form]);
 
+  const onGalleryChange = useCallback((value: GalleryDraftState) => {
+    setGalleryDraft(value);
+  }, []);
+
   const onSubmit = async (data: CommunityFormData) => {
     try {
+      let communityId: string | null = null;
+
       if (isEditing) {
-        // Re-generate slug if name changed
-        const updatePayload: Record<string, unknown> = { ...data };
+        const updatePayload: Record<string, unknown> = {
+          name: data.name,
+          city: data.city,
+          description: data.description || null,
+        };
+
         if (data.name !== community.name) {
           updatePayload.slug = generateSlug(data.name);
         }
@@ -80,17 +110,30 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
           .eq('id', community.id);
 
         if (error) throw error;
+        communityId = community.id;
+
+        await syncGalleryMedia({
+          entity: 'communities',
+          entityId: community.id,
+          draft: galleryDraft,
+          existingMedia,
+        });
 
         logAdminAction({
           action: AdminActions.COMMUNITY_UPDATE,
           targetType: AdminTargets.COMMUNITY,
           targetId: community.id,
-          previousState: { name: community.name, city: community.city, description: community.description, image_url: community.image_url },
-          newState: { name: data.name, city: data.city, description: data.description, image_url: data.image_url },
+          previousState: { name: community.name, city: community.city, description: community.description },
+          newState: {
+            name: data.name,
+            city: data.city,
+            description: data.description,
+            media_count: galleryDraft.items.length,
+          },
         });
 
         toast({
-          title: "Community Updated",
+          title: 'Community Updated',
           description: `${data.name} has been updated successfully.`,
         });
       } else {
@@ -98,34 +141,44 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
 
         const { data: inserted, error } = await supabase
           .from('communities')
-          .insert([{
-            name: data.name,
-            city: data.city,
-            description: data.description || null,
-            image_url: data.image_url || null,
-          }])
+          .insert([
+            {
+              name: data.name,
+              city: data.city,
+              description: data.description || null,
+            },
+          ])
           .select('id')
           .single();
 
         if (error) throw error;
 
-        // Generate and save slug after insert (two-step to avoid schema cache issues)
-        if (inserted?.id) {
-          await supabase
-            .from('communities')
-            .update({ slug })
-            .eq('id', inserted.id);
+        communityId = inserted?.id ?? null;
+        if (!communityId) {
+          throw new Error('Community insert did not return an id.');
         }
+
+        await supabase
+          .from('communities')
+          .update({ slug })
+          .eq('id', communityId);
+
+        await syncGalleryMedia({
+          entity: 'communities',
+          entityId: communityId,
+          draft: galleryDraft,
+          existingMedia: [],
+        });
 
         logAdminAction({
           action: AdminActions.COMMUNITY_CREATE,
           targetType: AdminTargets.COMMUNITY,
-          targetId: inserted?.id ?? 'unknown',
-          newState: { name: data.name, city: data.city, slug },
+          targetId: communityId,
+          newState: { name: data.name, city: data.city, slug, media_count: galleryDraft.items.length },
         });
 
         toast({
-          title: "Community Created",
+          title: 'Community Created',
           description: `${data.name} has been created successfully.`,
         });
       }
@@ -136,15 +189,17 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
     } catch (error) {
       console.error('Error saving community:', error);
       toast({
-        title: "Error",
+        title: 'Error',
         description: `Failed to ${isEditing ? 'update' : 'create'} community.`,
-        variant: "destructive",
+        variant: 'destructive',
       });
     }
   };
 
   const handleClose = () => {
     form.reset();
+    setGalleryDraft(createEmptyGalleryDraftState());
+    setExistingMedia([]);
     onClose();
   };
 
@@ -194,7 +249,7 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
                 <FormItem>
                   <FormLabel>Description</FormLabel>
                   <FormControl>
-                    <Textarea 
+                    <Textarea
                       placeholder="Enter community description (optional)"
                       className="min-h-[100px]"
                       {...field}
@@ -205,31 +260,19 @@ export function CommunityModal({ isOpen, onClose, onSuccess, community }: Commun
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="image_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <FileUpload
-                      bucket="community-images"
-                      path="communities"
-                      onUpload={field.onChange}
-                      currentImage={field.value}
-                      label="Community Image"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <MultiFileUpload
+              label="Community Gallery"
+              initialMedia={existingMedia}
+              onChange={onGalleryChange}
+              resetKey={`${community?.id ?? 'new'}-${galleryResetKey}`}
             />
 
             <div className="flex justify-end space-x-2 pt-4">
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={form.formState.isSubmitting}
                 className="admin-focus"
               >

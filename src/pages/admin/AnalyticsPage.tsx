@@ -55,6 +55,12 @@ interface AnalyticsData {
   paymentFunnel: Array<{ stage: string; count: number; percentage: number }>;
 }
 
+interface EventWithCommunity {
+  id: string;
+  title: string;
+  community?: { name?: string } | null;
+}
+
 const COLORS = {
   primary: 'hsl(var(--primary))',
   success: 'hsl(var(--success))',
@@ -209,25 +215,25 @@ export default function AnalyticsPage() {
 
       // Build event lookup map for names
       const eventLookup = new Map<string, { title: string; communityName: string }>();
-      (eventsResult.data || []).forEach(e => {
+      (eventsResult.data || []).forEach((e: EventWithCommunity) => {
         eventLookup.set(e.id, {
           title: e.title || 'Unknown Event',
-          communityName: (e as any).community?.name || 'No Community',
+          communityName: e.community?.name || 'No Community',
         });
       });
 
       // Fetch events with community names for payment analytics
       const eventIdsInPayments = [...new Set((allPaymentData || []).map(p => p.event_id))];
-      let eventPaymentLookup = new Map<string, { title: string; communityName: string }>();
+      const eventPaymentLookup = new Map<string, { title: string; communityName: string }>();
       if (eventIdsInPayments.length > 0) {
         const { data: eventPaymentData } = await supabase
           .from('events')
           .select('id, title, community:communities(name)')
           .in('id', eventIdsInPayments);
-        (eventPaymentData || []).forEach(e => {
+        (eventPaymentData || []).forEach((e: EventWithCommunity) => {
           eventPaymentLookup.set(e.id, {
             title: e.title || 'Unknown Event',
-            communityName: (e.community as any)?.name || 'No Community',
+            communityName: e.community?.name || 'No Community',
           });
         });
       }

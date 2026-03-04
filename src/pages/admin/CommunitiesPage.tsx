@@ -13,7 +13,10 @@ interface Community {
   name: string;
   description?: string;
   city: string;
-  image_url?: string;
+  gallery_media?: Array<{
+    media_url: string;
+    sort_order: number;
+  }>;
   created_at: string;
   updated_at: string;
   member_count?: number;
@@ -46,7 +49,7 @@ const columns: Column<Community>[] = [
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10">
           <AvatarImage
-            src={safeString(row.image_url) || undefined}
+            src={safeString(row.gallery_media?.[0]?.media_url) || undefined}
             alt={safeString(row.name) || 'Community image'}
             onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = ''; }}
           />
@@ -127,6 +130,7 @@ export default function CommunitiesPage() {
         .from('communities')
         .select(`
           *,
+          gallery_media(media_url, sort_order),
           member_count:community_members(count),
           event_count:events(count)
         `);
@@ -136,6 +140,7 @@ export default function CommunitiesPage() {
       // Transform the data to flatten the counts
       const transformedData = communitiesData?.map(community => ({
         ...community,
+        gallery_media: [...(community.gallery_media || [])].sort((a, b) => a.sort_order - b.sort_order),
         member_count: community.member_count?.[0]?.count || 0,
         event_count: community.event_count?.[0]?.count || 0,
       })) || [];

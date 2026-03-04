@@ -30,6 +30,12 @@ interface DiscussionDetailsModalProps {
   onDelete?: () => void;
 }
 
+interface DiscussionCommentRow {
+  id: string;
+  created_at: string;
+  user: { name: string; photo_url?: string };
+}
+
 const safeString = (v: unknown): string => { if (v == null) return ''; try { return String(v); } catch { return ''; } };
 const getInitials = (name?: string) => { const s = safeString(name).trim(); if (!s) return 'U'; const p = s.split(/\s+/); return `${p[0]?.[0] ?? ''}${p[p.length-1]?.[0] ?? ''}`.toUpperCase() || 'U'; };
 
@@ -55,9 +61,9 @@ export function DiscussionDetailsModal({ isOpen, onClose, discussion, onEdit, on
             .order('created_at', { ascending: true })
             .limit(10),
         ]);
-        setCommunity((commRes as any).data || null);
-        setCreator((creatorRes as any).data || null);
-        setComments((commentsRes as any).data || []);
+        setCommunity(commRes.data || null);
+        setCreator(creatorRes.data || null);
+        setComments((commentsRes.data || []) as DiscussionCommentRow[]);
       } catch (err) {
         console.error('Error loading discussion details:', err);
         toast({ title: 'Error Loading Discussion', description: 'Failed to load discussion details.', variant: 'destructive' });
@@ -179,4 +185,3 @@ export function DiscussionDetailsModal({ isOpen, onClose, discussion, onEdit, on
     </Dialog>
   );
 }
-

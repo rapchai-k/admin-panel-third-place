@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -60,6 +60,11 @@ interface Event {
   short_code?: string;
 }
 
+interface GalleryMediaRow {
+  media_url: string;
+  sort_order: number;
+}
+
 // Helpers for null-safe strings and initials (local to this file)
 const safeString = (v: unknown): string => {
   if (v === null || v === undefined) return '';
@@ -88,6 +93,8 @@ interface EventDetailsModalProps {
 export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewRegistrations, onCancel }: EventDetailsModalProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [galleryMedia, setGalleryMedia] = useState<GalleryMediaRow[]>([]);
+  const [isLoadingGallery, setIsLoadingGallery] = useState(false);
 
   const { formatCurrency } = useCurrency();
   const { toast } = useToast();
@@ -108,6 +115,33 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
       document.body.removeChild(input);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && event?.id) {
+      loadGallery();
+    } else {
+      setGalleryMedia([]);
+    }
+  }, [isOpen, event?.id]);
+
+  const loadGallery = async () => {
+    if (!event?.id) return;
+    try {
+      setIsLoadingGallery(true);
+      const { data, error } = await supabase
+        .from('gallery_media')
+        .select('media_url, sort_order')
+        .eq('event_id', event.id)
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      setGalleryMedia(data || []);
+    } catch (err) {
+      console.error('Failed to load event gallery:', err);
+    } finally {
+      setIsLoadingGallery(false);
     }
   };
 
@@ -370,6 +404,33 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
                 )}
               </div>
             </div>
+
+            {/* Gallery Preview */}
+            {(galleryMedia.length > 0 || isLoadingGallery) && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">Event Gallery</span>
+                  </div>
+                  {isLoadingGallery ? (
+                    <div className="text-sm text-muted-foreground animate-pulse">Loading gallery...</div>
+                  ) : (
+                    <div className="flex gap-2 overflow-x-auto pb-2 snap-x">
+                      {galleryMedia.map((media, i) => (
+                        <div key={i} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md border bg-muted snap-start">
+                          <img
+                            src={media.media_url}
+                            alt={`Gallery image ${i + 1}`}
+                            className="h-full w-full object-cover"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
 
             <Separator />
 

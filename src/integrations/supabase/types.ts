@@ -551,6 +551,54 @@ export type Database = {
           },
         ]
       }
+      gallery_media: {
+        Row: {
+          community_id: string | null
+          created_at: string
+          event_id: string | null
+          id: string
+          media_url: string
+          mimetype: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          community_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          media_url: string
+          mimetype: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          community_id?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          media_url?: string
+          mimetype?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_media_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_media_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flags: {
         Row: {
           comment_id: string | null

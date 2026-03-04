@@ -25,6 +25,22 @@ interface User {
   badge_count?: number;
 }
 
+interface UserWithCountsRow {
+  id: string;
+  name: string;
+  email: string | null;
+  photo_url: string | null;
+  role: User['role'];
+  is_banned: boolean;
+  created_at: string;
+  updated_at: string;
+  referral_code: string | null;
+  referred_by: string | null;
+  community_count: number | string | null;
+  event_count: number | string | null;
+  badge_count: number | string | null;
+}
+
 
 // Null-safe helpers for string handling and initials
 function safeString(v: unknown): string {
@@ -199,7 +215,7 @@ export default function UsersPage() {
         throw error;
       }
 
-      const usersWithCounts: User[] = (data || []).map((row: any) => ({
+      const usersWithCounts: User[] = ((data || []) as UserWithCountsRow[]).map((row) => ({
         id: row.id,
         name: row.name,
         email: row.email || undefined,

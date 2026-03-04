@@ -19,7 +19,13 @@ import { AdminActions, AdminTargets } from '@/lib/admin-events';
 interface UserRoleModalProps {
   isOpen: boolean;
   onClose: () => void;
-  role?: any;
+  role?: {
+    id: string;
+    user_id: string;
+    role: string;
+    expires_at?: string | null;
+    is_active: boolean;
+  };
   onSave: () => void;
 }
 
@@ -82,7 +88,7 @@ export function UserRoleModal({ isOpen, onClose, role, onSave }: UserRoleModalPr
     try {
       const payload = {
         user_id: data.user_id,
-        role: data.role as any,
+        role: data.role,
         expires_at: showExpiry && data.expires_at ? data.expires_at.toISOString() : null,
         is_active: data.is_active,
         ...(role ? {} : { granted_by: (await supabase.auth.getUser()).data.user?.id })
@@ -110,7 +116,7 @@ export function UserRoleModal({ isOpen, onClose, role, onSave }: UserRoleModalPr
         // Create new role
         const { data: inserted, error } = await supabase
           .from('user_roles')
-          .insert(payload as any)
+          .insert(payload)
           .select('id')
           .single();
 
@@ -128,10 +134,11 @@ export function UserRoleModal({ isOpen, onClose, role, onSave }: UserRoleModalPr
 
       onSave();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       toast({
         title: role ? 'Failed to update role' : 'Failed to assign role',
-        description: error.message,
+        description: message,
         variant: 'destructive',
       });
     }

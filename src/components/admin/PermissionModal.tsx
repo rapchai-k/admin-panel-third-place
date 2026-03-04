@@ -19,7 +19,15 @@ import { AdminActions, AdminTargets } from '@/lib/admin-events';
 interface PermissionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  permission?: any;
+  permission?: {
+    id: string;
+    user_id: string;
+    permission_type: string;
+    resource_type?: string | null;
+    resource_id?: string | null;
+    expires_at?: string | null;
+    is_active: boolean;
+  };
   onSave: () => void;
 }
 
@@ -148,10 +156,11 @@ export function PermissionModal({ isOpen, onClose, permission, onSave }: Permiss
 
       // Use type assertion to fix the dynamic table query
       const validTableNames = ['users', 'communities', 'discussions', 'events'] as const;
-      if (!validTableNames.includes(resourceType as any)) return [];
+      if (!validTableNames.includes(resourceType as (typeof validTableNames)[number])) return [];
+      const tableName = resourceType as (typeof validTableNames)[number];
 
       const { data, error } = await supabase
-        .from(resourceType as any)
+        .from(tableName)
         .select('id, name, title')
         .limit(50);
 
@@ -217,10 +226,11 @@ export function PermissionModal({ isOpen, onClose, permission, onSave }: Permiss
 
       onSave();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
       toast({
         title: permission ? 'Failed to update permission' : 'Failed to grant permission',
-        description: error.message,
+        description: message,
         variant: 'destructive',
       });
     }

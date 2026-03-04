@@ -180,7 +180,7 @@ export default function ModerationPage() {
 
       const transformedData = flagsData?.map(flag => ({
         ...flag,
-        comment: (flag.comment as any)?.[0] || null,
+        comment: (flag.comment as Array<Flag['comment']> | null)?.[0] || null,
       })) || [];
 
       setFlags(transformedData as Flag[]);

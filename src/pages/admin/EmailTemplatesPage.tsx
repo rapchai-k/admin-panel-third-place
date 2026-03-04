@@ -16,7 +16,7 @@ interface EmailTemplate {
   event_type: string;
   subject: string;
   html_content: string;
-  variables: any;
+  variables: unknown;
   is_active: boolean;
   version: number;
   created_by: string | null;
@@ -200,4 +200,3 @@ export default function EmailTemplatesPage() {
     </div>
   );
 }
-

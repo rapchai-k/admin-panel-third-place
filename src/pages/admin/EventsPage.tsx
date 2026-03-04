@@ -20,7 +20,10 @@ interface Event {
   capacity: number;
   price?: number;
   currency?: string;
-  image_url?: string;
+  gallery_media?: Array<{
+    media_url: string;
+    sort_order: number;
+  }>;
   external_link?: string;
   community_id: string;
   host_id?: string;
@@ -67,7 +70,7 @@ const createColumns = (formatCurrency: (value: number, code?: string) => string)
       <div className="flex items-center gap-3">
         <Avatar className="h-10 w-10">
           <AvatarImage
-            src={safeString(row.image_url) || undefined}
+            src={safeString(row.gallery_media?.[0]?.media_url) || undefined}
             alt={safeString(row.title) || 'Event image'}
             onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = ''; }}
           />
@@ -233,6 +236,7 @@ export default function EventsPage() {
         .from('events')
         .select(`
           *,
+          gallery_media(media_url, sort_order),
           community:communities(name, city),
           host:users(name, photo_url),
           registration_count:event_registrations(count)
@@ -243,6 +247,7 @@ export default function EventsPage() {
 
       const transformedData = eventsData?.map(event => ({
         ...event,
+        gallery_media: [...(event.gallery_media || [])].sort((a, b) => a.sort_order - b.sort_order),
         registration_count: event.registration_count?.[0]?.count || 0,
       })) || [];
 

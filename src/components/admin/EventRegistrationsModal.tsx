@@ -62,6 +62,16 @@ interface EventRegistrationsModalProps {
   eventTitle: string;
 }
 
+interface PaymentSessionRow {
+  id: string;
+  payment_status: 'yet_to_pay' | 'paid' | null;
+  amount: number;
+  currency: string;
+  expires_at: string;
+  razorpay_payment_link_id?: string | null;
+  razorpay_payment_id?: string | null;
+}
+
 export function EventRegistrationsModal({
   isOpen,
   onClose,
@@ -134,13 +144,13 @@ export function EventRegistrationsModal({
             event: reg.event,
             status: reg.status,
             payment_session: reg.payment_session ? {
-              id: (reg.payment_session as any).id,
-              payment_status: (reg.payment_session as any).payment_status,
-              amount: (reg.payment_session as any).amount,
-              currency: (reg.payment_session as any).currency,
-              expires_at: (reg.payment_session as any).expires_at,
-              razorpay_payment_link_id: (reg.payment_session as any).razorpay_payment_link_id,
-              razorpay_payment_id: (reg.payment_session as any).razorpay_payment_id,
+              id: (reg.payment_session as PaymentSessionRow).id,
+              payment_status: (reg.payment_session as PaymentSessionRow).payment_status,
+              amount: (reg.payment_session as PaymentSessionRow).amount,
+              currency: (reg.payment_session as PaymentSessionRow).currency,
+              expires_at: (reg.payment_session as PaymentSessionRow).expires_at,
+              razorpay_payment_link_id: (reg.payment_session as PaymentSessionRow).razorpay_payment_link_id,
+              razorpay_payment_id: (reg.payment_session as PaymentSessionRow).razorpay_payment_id,
             } : null,
             registered_at: reg.created_at,
             special_requests: undefined,

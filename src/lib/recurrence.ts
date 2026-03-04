@@ -72,7 +72,7 @@ export function generateRecurrenceDates(config: RecurrenceConfig): Date[] {
     const days = (daysOfWeek && daysOfWeek.length > 0) ? [...daysOfWeek].sort((a, b) => a - b) : [startDate.getDay()];
 
     // Walk week-by-week from the start date's week
-    let weekStart = new Date(startDate);
+    const weekStart = new Date(startDate);
     weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // go to Sunday
     weekStart.setHours(hours, minutes, seconds, 0);
 
@@ -101,7 +101,7 @@ export function generateRecurrenceDates(config: RecurrenceConfig): Date[] {
     }
   } else if (pattern === 'monthly') {
     const targetDay = dayOfMonth || startDate.getDate();
-    let cursor = new Date(startDate);
+    const cursor = new Date(startDate);
     cursor.setDate(1); // reset to 1st to safely add months
 
     while (shouldContinue(cursor)) {
@@ -132,7 +132,6 @@ export function buildChildEvents(
     venue: string;
     capacity: number;
     price?: number | null;
-    image_url?: string | null;
     external_link?: string | null;
     community_id: string;
     host_id?: string | null;
@@ -148,4 +147,3 @@ export function buildChildEvents(
     is_recurring_parent: false,
   }));
 }
-

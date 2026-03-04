@@ -3,12 +3,12 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 // Chart context
-const ChartContext = React.createContext<{} | null>(null)
+const ChartContext = React.createContext<object | null>(null)
 
 const ChartContainer = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
-    config?: Record<string, any>
+    config?: Record<string, unknown>
     children: React.ReactNode
   }
 >(({ id, className, children, config = {}, ...props }, ref) => {
@@ -51,16 +51,16 @@ const ChartTooltipContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & {
     active?: boolean
-    payload?: any[]
+    payload?: Array<Record<string, unknown>>
     hideLabel?: boolean
     hideIndicator?: boolean
     indicator?: "line" | "dot" | "dashed"
     nameKey?: string
     labelKey?: string
     label?: string
-    labelFormatter?: (label: any, payload: any) => React.ReactNode
+    labelFormatter?: (label: unknown, payload: Array<Record<string, unknown>>) => React.ReactNode
     labelClassName?: string
-    formatter?: (value: any, name: any, item: any, index: any) => React.ReactNode
+    formatter?: (value: unknown, name: string, item: Record<string, unknown>, index: number) => React.ReactNode
     color?: string
   }
 >(
@@ -122,9 +122,10 @@ const ChartTooltipContent = React.forwardRef<
       >
         {tooltipLabel}
         <div className="grid gap-1.5">
-          {payload.map((item: any, index: number) => {
-            const key = `${nameKey || item.name || item.dataKey || "value"}`
-            const indicatorColor = color || item.payload?.fill || item.color
+          {payload.map((item, index: number) => {
+            const key = `${nameKey || (item.name as string) || (item.dataKey as string) || "value"}`
+            const itemPayload = item.payload as { fill?: string } | undefined
+            const indicatorColor = color || itemPayload?.fill || (item.color as string | undefined)
 
             return (
               <div
@@ -169,11 +170,11 @@ const ChartTooltipContent = React.forwardRef<
                           {key}
                         </span>
                       </div>
-                      {item.value && (
-                        <span className="font-mono font-medium tabular-nums text-foreground">
-                          {item.value.toLocaleString()}
-                        </span>
-                      )}
+                        {item.value && (
+                          <span className="font-mono font-medium tabular-nums text-foreground">
+                          {(item.value as number).toLocaleString()}
+                          </span>
+                        )}
                     </div>
                   </>
                 )}
@@ -208,7 +209,7 @@ const ChartLegendContent = React.forwardRef<
   React.ComponentProps<"div"> & {
     nameKey?: string
     hideIcon?: boolean
-    payload?: any[]
+    payload?: Array<{ value?: string; color?: string }>
     verticalAlign?: string
   }
 >(
@@ -226,7 +227,7 @@ const ChartLegendContent = React.forwardRef<
         )}
         {...props}
       >
-        {payload.map((item: any, index: number) => {
+        {payload.map((item, index: number) => {
           return (
             <div
               key={item.value || index}

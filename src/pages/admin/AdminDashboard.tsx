@@ -43,9 +43,13 @@ interface RegistrationRow {
 
 interface PaymentRow {
   id: string;
+  user_id: string;
+  event_id: string;
   amount: number;
   payment_status: string | null;
+  expires_at: string;
   created_at: string;
+  updated_at: string;
   user: { name: string } | null;
   event: { title: string } | null;
 }
@@ -103,6 +107,19 @@ function timeAgo(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString();
 }
 
+function getDisplayStatus(ps: { payment_status: string | null; expires_at: string }): string {
+  const status = ps.payment_status;
+  if (status === 'paid') return 'paid';
+  if (status === 'failed') return 'failed';
+  if (status === 'cancelled') return 'cancelled';
+  if (status === 'refunded') return 'refunded';
+  if (status === 'expired') return 'expired';
+  if (status === 'yet_to_pay') {
+    return new Date(ps.expires_at) < new Date() ? 'expired' : 'yet_to_pay';
+  }
+  return status || 'unknown';
+}
+
 // ── Component ─────────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -147,9 +164,9 @@ export default function AdminDashboard() {
           .limit(5),
         supabase
           .from('payment_sessions')
-          .select('id, amount, payment_status, created_at, user:user_id(name), event:event_id(title)')
-          .order('created_at', { ascending: false })
-          .limit(5),
+          .select('id, user_id, event_id, amount, payment_status, expires_at, created_at, updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(50),
         supabase
           .from('users')
           .select('id, name, created_at, is_banned')
@@ -162,10 +179,47 @@ export default function AdminDashboard() {
           .limit(5),
       ]);
 
+      const paymentSessions = ((paymentsRes.data as unknown as Array<Omit<PaymentRow, 'user' | 'event'>>) || []);
+      const userIds = [...new Set(paymentSessions.map((p) => p.user_id))];
+      const eventIds = [...new Set(paymentSessions.map((p) => p.event_id))];
+
+      const [paymentUsersRes, paymentEventsRes] = await Promise.all([
+        userIds.length > 0
+          ? supabase.from('users').select('id, name').in('id', userIds)
+          : Promise.resolve({ data: [], error: null }),
+        eventIds.length > 0
+          ? supabase.from('events').select('id, title').in('id', eventIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+
+      const paymentUserMap = new Map<string, { name: string }>();
+      (paymentUsersRes.data || []).forEach((u) => {
+        paymentUserMap.set(u.id, { name: u.name });
+      });
+
+      const paymentEventMap = new Map<string, { title: string }>();
+      (paymentEventsRes.data || []).forEach((e) => {
+        paymentEventMap.set(e.id, { title: e.title });
+      });
+
+      const paidPayments: PaymentRow[] = paymentSessions
+        .filter((p) => getDisplayStatus({ payment_status: p.payment_status, expires_at: p.expires_at }) === 'paid')
+        .sort((a, b) => {
+          const aTs = new Date(a.updated_at || a.created_at).getTime();
+          const bTs = new Date(b.updated_at || b.created_at).getTime();
+          return bTs - aTs;
+        })
+        .slice(0, 5)
+        .map((p) => ({
+          ...p,
+          user: paymentUserMap.get(p.user_id) || { name: 'Unknown' },
+          event: paymentEventMap.get(p.event_id) || { title: 'Unknown event' },
+        }));
+
       setData({
         flags: (flagsRes.data as unknown as FlagRow[]) || [],
         registrations: (regsRes.data as unknown as RegistrationRow[]) || [],
-        payments: (paymentsRes.data as unknown as PaymentRow[]) || [],
+        payments: paidPayments,
         users: (usersRes.data as UserRow[]) || [],
         communities: (communitiesRes.data as CommunityRow[]) || [],
       });
@@ -321,7 +375,7 @@ export default function AdminDashboard() {
                       <Badge variant={p.payment_status === 'paid' ? 'default' : 'secondary'} className="text-xs">
                         {p.payment_status === 'paid' ? formatCurrency(p.amount) : p.payment_status || 'pending'}
                       </Badge>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(p.created_at)}</span>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">{timeAgo(p.updated_at || p.created_at)}</span>
                     </div>
                   </div>
                 ))

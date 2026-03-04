@@ -12,8 +12,19 @@ import { PaymentDetailsModal } from '@/components/admin/PaymentDetailsModal';
 interface PaymentLog {
   id: string;
   event_type: string;
-  event_data: any;
+  event_data: unknown;
   created_at: string;
+}
+
+interface UserEmailRow {
+  user_id: string;
+  email: string;
+}
+
+interface PaymentSessionWithOptionalFields {
+  razorpay_payment_link_id?: string | null;
+  razorpay_payment_id?: string | null;
+  gateway?: string | null;
 }
 
 interface Payment {
@@ -207,7 +218,7 @@ export default function PaymentsPage() {
         userMap.set(u.id, { name: u.name, photo_url: u.photo_url ?? undefined });
       });
       // Attach emails from batch RPC result
-      ((emailsResult.data as any[]) || []).forEach((row: { user_id: string; email: string }) => {
+      ((emailsResult.data as UserEmailRow[]) || []).forEach((row) => {
         const existing = userMap.get(row.user_id);
         if (existing) existing.email = row.email || undefined;
       });
@@ -235,9 +246,9 @@ export default function PaymentsPage() {
           status: s.status,
           payment_status: s.payment_status,
           payment_url: s.payment_url,
-          razorpay_payment_link_id: (s as any).razorpay_payment_link_id ?? null,
-          razorpay_payment_id: (s as any).razorpay_payment_id ?? null,
-          gateway: (s as any).gateway ?? 'razorpay',
+          razorpay_payment_link_id: (s as PaymentSessionWithOptionalFields).razorpay_payment_link_id ?? null,
+          razorpay_payment_id: (s as PaymentSessionWithOptionalFields).razorpay_payment_id ?? null,
+          gateway: (s as PaymentSessionWithOptionalFields).gateway ?? 'razorpay',
           expires_at: s.expires_at,
           created_at: s.created_at,
           updated_at: s.updated_at,
@@ -406,4 +417,3 @@ export default function PaymentsPage() {
     </div>
   );
 }
-

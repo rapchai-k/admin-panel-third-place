@@ -21,7 +21,7 @@ export async function logAdminAction(entry: AuditEntry): Promise<void> {
 
     // Insert uses the raw table name; the type definition for
     // admin_audit_log has been added to types.ts.
-    await (supabase as any).from('admin_audit_log').insert({
+    await supabase.from('admin_audit_log').insert({
       admin_user_id: user.id,
       action: entry.action,
       target_type: entry.targetType,
@@ -57,9 +57,8 @@ export async function logAdminActions(entries: AuditEntry[]): Promise<void> {
       metadata: e.metadata ?? null,
     }));
 
-    await (supabase as any).from('admin_audit_log').insert(rows);
+    await supabase.from('admin_audit_log').insert(rows);
   } catch (err) {
     console.error('[admin-audit] Failed to batch-log actions', err);
   }
 }
-

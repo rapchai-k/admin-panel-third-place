@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,13 +19,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Calendar as CalendarIcon, Repeat, ChevronDown, ChevronUp } from 'lucide-react';
 import { format } from 'date-fns';
-import { FileUpload } from '@/components/ui/file-upload';
+import { MultiFileUpload } from '@/components/ui/multi-file-upload';
 import { cn } from '@/lib/utils';
 import { generateRecurrenceDates, buildChildEvents, type RecurrencePattern, type RecurrenceEndType } from '@/lib/recurrence';
 import { logAdminAction } from '@/lib/admin-audit';
 import { AdminActions, AdminTargets } from '@/lib/admin-events';
 import { generateShortCode, buildEventShortUrl } from '@/lib/short-url';
 import { EventCreatedModal, type CreatedEventInfo } from './EventCreatedModal';
+import {
+  createEmptyGalleryDraftState,
+  type GalleryDraftState,
+  type GalleryMediaRow,
+  loadGalleryMediaForEntity,
+  syncGalleryMedia,
+} from '@/lib/gallery-media';
 
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
@@ -34,7 +41,6 @@ const eventSchema = z.object({
   venue: z.string().min(1, 'Venue is required').max(200, 'Venue must be less than 200 characters'),
   capacity: z.number().min(1, 'Capacity must be at least 1').max(10000, 'Capacity must be less than 10,000'),
   price: z.number().min(0, 'Price cannot be negative').optional(),
-  image_url: z.string().optional(),
   external_link: z.string().url('External link must be a valid URL').optional().or(z.literal('')),
   community_id: z.string().min(1, 'Community is required'),
   host_id: z.string().optional(),
@@ -50,7 +56,6 @@ interface Event {
   venue: string;
   capacity: number;
   price?: number;
-  image_url?: string;
   external_link?: string;
   community_id: string;
   host_id?: string;
@@ -87,6 +92,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
 
   // Recurrence state (only for create mode)
   const [isRecurring, setIsRecurring] = useState(false);
+  const isRecurringRef = useRef(false);
   const [recurrencePattern, setRecurrencePattern] = useState<RecurrencePattern>('weekly');
   const [recurrenceFrequency, setRecurrenceFrequency] = useState(1);
   const [recurrenceDaysOfWeek, setRecurrenceDaysOfWeek] = useState<number[]>([]);
@@ -98,6 +104,9 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
 
   // Success modal state (shown after event creation with short URL)
   const [createdEventInfo, setCreatedEventInfo] = useState<CreatedEventInfo | null>(null);
+  const [existingMedia, setExistingMedia] = useState<GalleryMediaRow[]>([]);
+  const [galleryDraft, setGalleryDraft] = useState<GalleryDraftState>(createEmptyGalleryDraftState());
+  const [galleryResetKey, setGalleryResetKey] = useState(0);
 
   const form = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
@@ -108,7 +117,6 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
       venue: event?.venue || '',
       capacity: event?.capacity || 50,
       price: event?.price || 0,
-      image_url: event?.image_url || '',
       external_link: event?.external_link || '',
       community_id: event?.community_id || '',
       host_id: event?.host_id || '',
@@ -150,13 +158,13 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
         venue: event?.venue || '',
         capacity: event?.capacity || 50,
         price: event?.price || 0,
-        image_url: event?.image_url || '',
         external_link: event?.external_link || '',
         community_id: event?.community_id || '',
         host_id: event?.host_id || '',
       });
       // Reset recurrence state
       setIsRecurring(false);
+      isRecurringRef.current = false;
       setRecurrencePattern('weekly');
       setRecurrenceFrequency(1);
       setRecurrenceDaysOfWeek([]);
@@ -173,8 +181,15 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
     if (isOpen) {
       loadCommunities();
       loadUsers();
+      if (event?.id) {
+        void loadEventMedia(event.id);
+      } else {
+        setExistingMedia([]);
+        setGalleryDraft(createEmptyGalleryDraftState());
+        setGalleryResetKey((value) => value + 1);
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, event?.id]);
 
   const loadCommunities = async () => {
     try {
@@ -205,6 +220,17 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
     }
   };
 
+  const loadEventMedia = async (eventId: string) => {
+    try {
+      const rows = await loadGalleryMediaForEntity('events', eventId);
+      setExistingMedia(rows);
+      setGalleryDraft(createEmptyGalleryDraftState());
+      setGalleryResetKey((value) => value + 1);
+    } catch (error) {
+      console.error('Error loading event media:', error);
+    }
+  };
+
   const onSubmit = async (data: EventFormData) => {
     try {
       // Frontend enforcement: prevent editing if event is cancelled
@@ -218,11 +244,17 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
       }
 
       const eventData = {
-        ...data,
+        title: data.title,
+        description: data.description,
         date_time: data.date_time ? data.date_time.toISOString() : null,
+        venue: data.venue,
+        capacity: data.capacity,
         price: data.price || 0,
+        external_link: data.external_link || null,
+        community_id: data.community_id,
         host_id: data.host_id || null,
       };
+      const shouldCreateRecurring = !isEditing && isRecurringRef.current === true;
 
       if (isEditing) {
         // Fields safe to propagate across all instances (excludes date_time which is instance-specific)
@@ -232,8 +264,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           venue: eventData.venue,
           capacity: eventData.capacity,
           price: eventData.price,
-          image_url: eventData.image_url || null,
-          external_link: eventData.external_link || null,
+          external_link: eventData.external_link,
           community_id: eventData.community_id,
           host_id: eventData.host_id,
         };
@@ -245,6 +276,13 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           .neq('is_cancelled', true);
 
         if (error) throw error;
+
+        await syncGalleryMedia({
+          entity: 'events',
+          entityId: event.id,
+          draft: galleryDraft,
+          existingMedia,
+        });
 
         // Propagate shared properties to all series instances if requested
         if (applyToAll && isPartOfSeries) {
@@ -279,7 +317,12 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
             ? `${data.title} — all instances in the series have been updated.`
             : `${data.title} has been updated successfully.`,
         });
-      } else if (isRecurring && data.date_time) {
+      } else if (shouldCreateRecurring && data.date_time) {
+        const confirmed = window.confirm(
+          `This will create ${previewDates.length} events in a recurring series. Continue?`
+        );
+        if (!confirmed) return;
+
         // ── Recurring event: first occurrence = parent, rest = children ──
         const dates = generateRecurrenceDates({
           startDate: data.date_time,
@@ -311,8 +354,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
             venue: eventData.venue,
             capacity: eventData.capacity,
             price: eventData.price,
-            image_url: eventData.image_url || null,
-            external_link: eventData.external_link || null,
+            external_link: eventData.external_link,
             community_id: eventData.community_id,
             host_id: eventData.host_id,
             is_recurring_parent: true,
@@ -329,6 +371,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           .single();
 
         if (parentError) throw parentError;
+        if (!parentData?.id) throw new Error('Parent event insert did not return an id.');
 
         // Generate and save short code after successful insert
         const parentShortCode = generateShortCode();
@@ -348,8 +391,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
               venue: eventData.venue,
               capacity: eventData.capacity,
               price: eventData.price,
-              image_url: eventData.image_url || null,
-              external_link: eventData.external_link || null,
+              external_link: eventData.external_link,
               community_id: eventData.community_id,
               host_id: eventData.host_id,
             },
@@ -367,6 +409,13 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
             throw childError;
           }
         }
+
+        await syncGalleryMedia({
+          entity: 'events',
+          entityId: parentData.id,
+          draft: galleryDraft,
+          existingMedia: [],
+        });
 
         logAdminAction({
           action: AdminActions.EVENT_CREATE,
@@ -397,8 +446,7 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
             venue: eventData.venue,
             capacity: eventData.capacity,
             price: eventData.price,
-            image_url: eventData.image_url || null,
-            external_link: eventData.external_link || null,
+            external_link: eventData.external_link,
             community_id: eventData.community_id,
             host_id: eventData.host_id,
           }])
@@ -406,6 +454,14 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           .single();
 
         if (error) throw error;
+        if (!inserted?.id) throw new Error('Event insert did not return an id.');
+
+        await syncGalleryMedia({
+          entity: 'events',
+          entityId: inserted.id,
+          draft: galleryDraft,
+          existingMedia: [],
+        });
 
         // Generate and save short code after successful insert
         const singleShortCode = generateShortCode();
@@ -447,6 +503,9 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
   const handleClose = () => {
     form.reset();
     setIsRecurring(false);
+    isRecurringRef.current = false;
+    setGalleryDraft(createEmptyGalleryDraftState());
+    setExistingMedia([]);
     onClose();
   };
 
@@ -642,7 +701,10 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
                   <Switch
                     id="recurring-toggle"
                     checked={isRecurring}
-                    onCheckedChange={setIsRecurring}
+                    onCheckedChange={(checked) => {
+                      isRecurringRef.current = checked;
+                      setIsRecurring(checked);
+                    }}
                   />
                 </div>
 
@@ -834,29 +896,17 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
                 </label>
                 {applyToAll && (
                   <p className="text-xs text-blue-600">
-                    Title, description, venue, capacity, price, and image will be updated across all instances. Date/time remains instance-specific.
+                    Title, description, venue, capacity, and price will be updated across all instances. Date/time remains instance-specific.
                   </p>
                 )}
               </div>
             )}
 
-            <FormField
-              control={form.control}
-              name="image_url"
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl>
-                    <FileUpload
-                      bucket="event-images"
-                      path="events"
-                      onUpload={field.onChange}
-                      currentImage={field.value}
-                      label="Event Image"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+            <MultiFileUpload
+              label="Event Gallery"
+              initialMedia={existingMedia}
+              onChange={setGalleryDraft}
+              resetKey={`${event?.id ?? 'new'}-${galleryResetKey}`}
             />
 
             <FormField

@@ -51,7 +51,7 @@ interface EmailTemplateModalProps {
     event_type: string;
     subject: string;
     html_content: string;
-    variables: any;
+    variables: unknown;
     is_active: boolean;
     version: number;
   };
@@ -97,7 +97,7 @@ export function EmailTemplateModal({
 
   const onSubmit = async (data: TemplateFormData) => {
     try {
-      let parsedVars: any = [];
+      let parsedVars: unknown[] = [];
       try {
         parsedVars = data.variables ? JSON.parse(data.variables) : [];
       } catch {

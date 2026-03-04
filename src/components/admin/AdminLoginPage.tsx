@@ -18,7 +18,9 @@ export function AdminLoginPage() {
   const { signIn, isAdmin, user, isLoading: authLoading } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const from = (location.state as any)?.from?.pathname || '/admin/dashboard';
+  const from = (
+    (location.state as { from?: { pathname?: string } } | null)?.from?.pathname
+  ) || '/admin/dashboard';
 
   useEffect(() => {
     if (!authLoading && user && isAdmin) {

@@ -23,7 +23,7 @@ interface UserSummary {
   badge_count?: number;
 }
 
-interface CommunityItem { id: string; name: string; city?: string; image_url?: string; }
+interface CommunityItem { id: string; name: string; city?: string; gallery_media?: Array<{ media_url: string; sort_order: number }>; }
 interface EventItem { id: string; title: string; date_time: string | null; venue?: string; status?: string; }
 interface BadgeItem { badge: string; granted_at: string; }
 
@@ -34,6 +34,20 @@ interface UserDetailsModalProps {
   onEdit?: (user: UserSummary) => void;
   onPromote?: (user: UserSummary) => void;
   onBan?: (user: UserSummary) => void;
+}
+
+interface CommunityMembershipRow {
+  community: CommunityItem | null;
+}
+
+interface EventRegistrationRow {
+  status: string;
+  event: {
+    id: string;
+    title: string;
+    date_time: string | null;
+    venue?: string;
+  } | null;
 }
 
 const safeString = (v: unknown): string => {
@@ -67,7 +81,7 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
         const [cmRes, evRes, bdRes, refRes] = await Promise.all([
           supabase
             .from('community_members')
-            .select('community:communities(id,name,city,image_url)')
+            .select('community:communities(id,name,city,gallery_media(media_url,sort_order))')
             .eq('user_id', user.id)
             .limit(5),
           supabase
@@ -87,16 +101,22 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
             : Promise.resolve({ data: null }),
         ]);
 
-        setCommunities((cmRes.data || []).map((r: any) => r.community).filter(Boolean));
-        setEvents((evRes.data || []).map((r: any) => ({
-          id: r.event?.id,
-          title: r.event?.title,
-          date_time: r.event?.date_time,
-          venue: r.event?.venue,
+        setCommunities(((cmRes.data || []) as CommunityMembershipRow[]).map((r) => {
+          if (!r.community) return null;
+          return {
+            ...r.community,
+            gallery_media: [...(r.community.gallery_media || [])].sort((a, b) => a.sort_order - b.sort_order),
+          };
+        }).filter(Boolean) as CommunityItem[]);
+        setEvents(((evRes.data || []) as EventRegistrationRow[]).filter((r) => !!r.event?.id).map((r) => ({
+          id: r.event!.id,
+          title: r.event!.title,
+          date_time: r.event!.date_time,
+          venue: r.event!.venue,
           status: r.status,
-        })).filter((e: EventItem) => !!e.id));
+        })));
         setBadges((bdRes.data || []) as BadgeItem[]);
-        setReferrerName((refRes as any)?.data?.name ?? null);
+        setReferrerName((refRes as { data: { name?: string } | null })?.data?.name ?? null);
       } catch (err) {
         console.error('Error loading user details:', err);
         toast({ title: 'Error Loading User', description: 'Failed to load user details.', variant: 'destructive' });
@@ -125,15 +145,15 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
               <h3 className="text-lg font-semibold">{user.name}</h3>
               {user.email && (
                 <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
-                  <Mail className="h-3 w-3"/> {user.email}
+                  <Mail className="h-3 w-3" /> {user.email}
                 </div>
               )}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <Badge variant={user.role === 'admin' ? 'default' : 'secondary'}>{user.role === 'admin' ? 'Admin' : 'User'}</Badge>
                 {user.is_banned && <Badge variant="destructive">Banned</Badge>}
-                <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4"/> Joined {new Date(user.created_at).toLocaleDateString()}</span>
+                <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> Joined {new Date(user.created_at).toLocaleDateString()}</span>
                 {user.referral_code && (
-                  <span className="inline-flex items-center gap-1"><Share2 className="h-4 w-4"/> Ref: <span className="font-mono">{user.referral_code}</span></span>
+                  <span className="inline-flex items-center gap-1"><Share2 className="h-4 w-4" /> Ref: <span className="font-mono">{user.referral_code}</span></span>
                 )}
                 {referrerName && (
                   <span className="inline-flex items-center gap-1">Referred by {referrerName}</span>
@@ -147,15 +167,15 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4">
             <div className="p-3 rounded-md bg-muted/50">
-              <div className="flex items-center gap-2"><Users className="h-4 w-4 text-primary"/><span className="font-medium">Communities</span></div>
+              <div className="flex items-center gap-2"><Users className="h-4 w-4 text-primary" /><span className="font-medium">Communities</span></div>
               <p className="mt-1 text-xl font-bold">{user.community_count ?? communities.length}</p>
             </div>
             <div className="p-3 rounded-md bg-muted/50">
-              <div className="flex items-center gap-2"><CalendarIcon className="h-4 w-4 text-primary"/><span className="font-medium">Events</span></div>
+              <div className="flex items-center gap-2"><CalendarIcon className="h-4 w-4 text-primary" /><span className="font-medium">Events</span></div>
               <p className="mt-1 text-xl font-bold">{user.event_count ?? events.length}</p>
             </div>
             <div className="p-3 rounded-md bg-muted/50">
-              <div className="flex items-center gap-2"><Award className="h-4 w-4 text-primary"/><span className="font-medium">Badges</span></div>
+              <div className="flex items-center gap-2"><Award className="h-4 w-4 text-primary" /><span className="font-medium">Badges</span></div>
               <p className="mt-1 text-xl font-bold">{user.badge_count ?? badges.length}</p>
             </div>
           </div>
@@ -164,15 +184,15 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Communities */}
             <div className="p-3 rounded-md bg-muted/40">
-              <div className="flex items-center gap-2 mb-2"><Users className="h-4 w-4"/><span className="font-medium">Joined Communities</span></div>
+              <div className="flex items-center gap-2 mb-2"><Users className="h-4 w-4" /><span className="font-medium">Joined Communities</span></div>
               {isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin"/> Loading…</div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
               ) : communities.length ? (
                 <ul className="space-y-2 text-sm">
                   {communities.map((c) => (
                     <li key={c.id} className="flex items-center gap-2">
                       <Avatar className="h-6 w-6">
-                        <AvatarImage src={c.image_url || ''} />
+                        <AvatarImage src={c.gallery_media?.[0]?.media_url || ''} />
                         <AvatarFallback className="text-[10px]">{getInitials(c.name)}</AvatarFallback>
                       </Avatar>
                       <span className="truncate">{c.name}</span>
@@ -187,9 +207,9 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
 
             {/* Events */}
             <div className="p-3 rounded-md bg-muted/40">
-              <div className="flex items-center gap-2 mb-2"><CalendarIcon className="h-4 w-4"/><span className="font-medium">Recent Events</span></div>
+              <div className="flex items-center gap-2 mb-2"><CalendarIcon className="h-4 w-4" /><span className="font-medium">Recent Events</span></div>
               {isLoading ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin"/> Loading…</div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
               ) : events.length ? (
                 <ul className="space-y-2 text-sm">
                   {events.map((e) => (
@@ -207,9 +227,9 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
 
           {/* Badges */}
           <div className="p-3 rounded-md bg-muted/40">
-            <div className="flex items-center gap-2 mb-2"><Award className="h-4 w-4"/><span className="font-medium">Badges</span></div>
+            <div className="flex items-center gap-2 mb-2"><Award className="h-4 w-4" /><span className="font-medium">Badges</span></div>
             {isLoading ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin"/> Loading…</div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
             ) : badges.length ? (
               <div className="flex flex-wrap gap-2">
                 {badges.map((b, idx) => (
@@ -224,13 +244,13 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
           {/* Actions (replaces table dropdown) */}
           <div className="flex items-center justify-end gap-2 pt-2">
             {onPromote && (
-              <Button variant="outline" onClick={() => onPromote(user)} className="gap-2"><Shield className="h-4 w-4"/> Promote to Admin</Button>
+              <Button variant="outline" onClick={() => onPromote(user)} className="gap-2"><Shield className="h-4 w-4" /> Promote to Admin</Button>
             )}
             {onBan && (
-              <Button variant="destructive" onClick={() => onBan(user)} className="gap-2"><UserX className="h-4 w-4"/> Ban User</Button>
+              <Button variant="destructive" onClick={() => onBan(user)} className="gap-2"><UserX className="h-4 w-4" /> Ban User</Button>
             )}
             {onEdit && (
-              <Button variant="default" onClick={() => onEdit(user)} className="gap-2"><Edit className="h-4 w-4"/> Edit</Button>
+              <Button variant="default" onClick={() => onEdit(user)} className="gap-2"><Edit className="h-4 w-4" /> Edit</Button>
             )}
             <Button variant="outline" onClick={onClose}>Close</Button>
           </div>
@@ -239,4 +259,3 @@ export function UserDetailsModal({ isOpen, onClose, user, onEdit, onPromote, onB
     </Dialog>
   );
 }
-

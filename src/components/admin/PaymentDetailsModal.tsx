@@ -26,7 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 interface PaymentLog {
   id: string;
   event_type: string;
-  event_data: any;
+  event_data: unknown;
   created_at: string;
 }
 
