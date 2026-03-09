@@ -284,17 +284,34 @@ export default function EventsPage() {
           gallery_media(media_url, sort_order),
           community:communities(name, city),
           host:users(name, photo_url),
-          registration_count:event_registrations(count),
-          post_jobs(id, status)
+          registration_count:event_registrations(count)
         `)
         .order('date_time', { ascending: false });
 
       if (error) throw error;
 
+      // Fetch post_jobs separately — the table may not exist yet on the DB
+      let postJobsByEvent: Record<string, Array<{ id: string; status: string }>> = {};
+      try {
+        const { data: jobsData } = await supabase
+          .from('post_jobs')
+          .select('id, status, event_id');
+        if (jobsData) {
+          for (const job of jobsData) {
+            const eid = (job as { event_id: string }).event_id;
+            if (!postJobsByEvent[eid]) postJobsByEvent[eid] = [];
+            postJobsByEvent[eid].push({ id: job.id, status: job.status });
+          }
+        }
+      } catch {
+        // post_jobs table may not exist — ignore
+      }
+
       const transformedData = eventsData?.map(event => ({
         ...event,
         gallery_media: [...(event.gallery_media || [])].sort((a, b) => a.sort_order - b.sort_order),
         registration_count: event.registration_count?.[0]?.count || 0,
+        post_jobs: postJobsByEvent[event.id] || [],
       })) || [];
 
       setEvents(transformedData as Event[]);
