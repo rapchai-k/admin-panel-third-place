@@ -599,6 +599,188 @@ export type Database = {
           },
         ]
       }
+      hootsuite_tokens: {
+        Row: {
+          access_token: string
+          expires_at: string
+          id: string
+          refresh_token: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          access_token: string
+          expires_at: string
+          id?: string
+          refresh_token: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          access_token?: string
+          expires_at?: string
+          id?: string
+          refresh_token?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hootsuite_tokens_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_assets: {
+        Row: {
+          created_at: string
+          hootsuite_media_id: string | null
+          hootsuite_upload_url: string | null
+          id: string
+          mimetype: string
+          post_job_id: string
+          sort_order: number
+          source_url: string
+          updated_at: string
+          upload_status: string
+        }
+        Insert: {
+          created_at?: string
+          hootsuite_media_id?: string | null
+          hootsuite_upload_url?: string | null
+          id?: string
+          mimetype: string
+          post_job_id: string
+          sort_order?: number
+          source_url: string
+          updated_at?: string
+          upload_status?: string
+        }
+        Update: {
+          created_at?: string
+          hootsuite_media_id?: string | null
+          hootsuite_upload_url?: string | null
+          id?: string
+          mimetype?: string
+          post_job_id?: string
+          sort_order?: number
+          source_url?: string
+          updated_at?: string
+          upload_status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_post_job_id_fkey"
+            columns: ["post_job_id"]
+            isOneToOne: false
+            referencedRelation: "post_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          created_by: string | null
+          event_id: string
+          hootsuite_message_id: string | null
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          post_text: string | null
+          scheduled_send_time: string | null
+          social_target_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          event_id: string
+          hootsuite_message_id?: string | null
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          post_text?: string | null
+          scheduled_send_time?: string | null
+          social_target_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          created_by?: string | null
+          event_id?: string
+          hootsuite_message_id?: string | null
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          post_text?: string | null
+          scheduled_send_time?: string | null
+          social_target_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_jobs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_jobs_social_target_id_fkey"
+            columns: ["social_target_id"]
+            isOneToOne: false
+            referencedRelation: "social_targets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_jobs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      social_targets: {
+        Row: {
+          created_at: string
+          hootsuite_social_profile_id: string
+          id: string
+          is_active: boolean
+          profile_name: string
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          hootsuite_social_profile_id: string
+          id?: string
+          is_active?: boolean
+          profile_name: string
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          hootsuite_social_profile_id?: string
+          id?: string
+          is_active?: boolean
+          profile_name?: string
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       flags: {
         Row: {
           comment_id: string | null

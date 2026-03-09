@@ -43,6 +43,11 @@ export const AdminActions = {
   TEMPLATE_CREATE: 'template.create',
   TEMPLATE_UPDATE: 'template.update',
   TEMPLATE_TOGGLE: 'template.toggle',
+
+  // Social Posting
+  SOCIAL_POST_SCHEDULED: 'social_post.scheduled',
+  SOCIAL_POST_FAILED: 'social_post.failed',
+  SOCIAL_POST_RETRIED: 'social_post.retried',
 } as const;
 
 export type AdminAction = (typeof AdminActions)[keyof typeof AdminActions];
@@ -57,6 +62,7 @@ export const AdminTargets = {
   PERMISSION: 'permission',
   FLAG: 'flag',
   TEMPLATE: 'template',
+  SOCIAL_POST: 'social_post',
 } as const;
 
 export type AdminTarget = (typeof AdminTargets)[keyof typeof AdminTargets];

@@ -3,9 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { Upload, Trash2, ArrowUp, ArrowDown, Image as ImageIcon } from 'lucide-react';
+import { Upload, Trash2, ArrowUp, ArrowDown, Image as ImageIcon, Film } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { GalleryDraftItem, GalleryDraftState, GalleryMediaRow } from '@/lib/gallery-media';
+import { isVideoMimetype } from '@/lib/gallery-media';
 
 interface MultiFileUploadProps {
   className?: string;
@@ -24,6 +25,7 @@ const toExistingItems = (media: GalleryMediaRow[]): GalleryDraftItem[] =>
     id: item.id,
     previewUrl: item.media_url,
     name: item.media_url.split('/').pop() || 'media',
+    mimetype: item.mimetype || 'image/jpeg',
   }));
 
 export function MultiFileUpload({
@@ -31,7 +33,7 @@ export function MultiFileUpload({
   disabled,
   initialMedia,
   label = 'Gallery Media',
-  maxSizeMB = 10,
+  maxSizeMB = 50,
   onChange,
   resetKey,
 }: MultiFileUploadProps) {
@@ -111,6 +113,7 @@ export function MultiFileUpload({
         file,
         previewUrl,
         name: file.name,
+        mimetype: file.type || 'application/octet-stream',
       };
     });
 
@@ -125,7 +128,7 @@ export function MultiFileUpload({
       <Input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         onChange={onFilesSelected}
         className="hidden"
@@ -140,7 +143,7 @@ export function MultiFileUpload({
         disabled={disabled}
       >
         <Upload className="mr-2 h-4 w-4" />
-        Add Images
+        Add Images / Videos
       </Button>
 
       <p className="text-xs text-muted-foreground">Max file size: {maxSizeMB}MB each</p>
@@ -156,11 +159,17 @@ export function MultiFileUpload({
           {items.map((item, index) => (
             <Card key={item.key} className="p-2">
               <div className="flex items-center gap-3">
-                <img
-                  src={item.previewUrl}
-                  alt={item.name}
-                  className="h-16 w-16 rounded object-cover border"
-                />
+                {isVideoMimetype(item.mimetype) ? (
+                  <div className="relative h-16 w-16 rounded border bg-muted flex items-center justify-center">
+                    <Film className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                ) : (
+                  <img
+                    src={item.previewUrl}
+                    alt={item.name}
+                    className="h-16 w-16 rounded object-cover border"
+                  />
+                )}
 
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{item.name}</p>

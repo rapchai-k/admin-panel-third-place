@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Calendar as CalendarIcon, Repeat, ChevronDown, ChevronUp } from 'lucide-react';
+import { Loader2, Calendar as CalendarIcon, Repeat, ChevronDown, ChevronUp, Share2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { MultiFileUpload } from '@/components/ui/multi-file-upload';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,8 @@ import {
   loadGalleryMediaForEntity,
   syncGalleryMedia,
 } from '@/lib/gallery-media';
+import { fetchSocialTargets, createPostJob, generatePostText } from '@/lib/social-posting';
+import type { SocialTarget, PostScheduleMode } from '@/lib/social-posting.types';
 
 const eventSchema = z.object({
   title: z.string().min(1, 'Title is required').max(200, 'Title must be less than 200 characters'),
@@ -108,6 +110,13 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
   const [galleryDraft, setGalleryDraft] = useState<GalleryDraftState>(createEmptyGalleryDraftState());
   const [galleryResetKey, setGalleryResetKey] = useState(0);
 
+  // Social posting state (create mode only)
+  const [publishToSocial, setPublishToSocial] = useState(false);
+  const [selectedChannels, setSelectedChannels] = useState<string[]>([]);
+  const [socialTargets, setSocialTargets] = useState<SocialTarget[]>([]);
+  const [postSchedule, setPostSchedule] = useState<PostScheduleMode>('immediate');
+  const [customScheduleTime, setCustomScheduleTime] = useState('');
+
   const form = useForm<EventFormData>({
     resolver: zodResolver(eventSchema),
     defaultValues: {
@@ -174,6 +183,11 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
       setRecurrenceCount(10);
       setShowPreview(false);
       setApplyToAll(false);
+      // Reset social posting state
+      setPublishToSocial(false);
+      setSelectedChannels([]);
+      setPostSchedule('immediate');
+      setCustomScheduleTime('');
     }
   }, [event, isOpen, form]);
 
@@ -187,6 +201,12 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
         setExistingMedia([]);
         setGalleryDraft(createEmptyGalleryDraftState());
         setGalleryResetKey((value) => value + 1);
+      }
+      // Load social channels for create mode
+      if (!event?.id) {
+        fetchSocialTargets()
+          .then(setSocialTargets)
+          .catch((err) => console.error('Failed to load social targets:', err));
       }
     }
   }, [isOpen, event?.id]);
@@ -228,6 +248,45 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
       setGalleryResetKey((value) => value + 1);
     } catch (error) {
       console.error('Error loading event media:', error);
+    }
+  };
+
+  /** Guess MIME type from a storage URL file extension */
+  const guessMimetypeFromUrl = (url: string): string => {
+    if (/\.(jpg|jpeg)$/i.test(url)) return 'image/jpeg';
+    if (/\.png$/i.test(url)) return 'image/png';
+    if (/\.gif$/i.test(url)) return 'image/gif';
+    if (/\.webp$/i.test(url)) return 'image/webp';
+    if (/\.mp4$/i.test(url)) return 'video/mp4';
+    if (/\.mov$/i.test(url)) return 'video/quicktime';
+    return 'image/jpeg';
+  };
+
+  /** Fire-and-forget social posting for a newly created event */
+  const triggerSocialPosting = async (eventId: string, eventData: EventFormData) => {
+    if (!publishToSocial || selectedChannels.length === 0) return;
+    try {
+      const media = await loadGalleryMediaForEntity('events', eventId);
+      const mediaSourceUrls = media.map(m => ({
+        url: m.media_url,
+        mimetype: guessMimetypeFromUrl(m.media_url),
+      }));
+      const postText = generatePostText({
+        title: eventData.title,
+        date_time: eventData.date_time?.toISOString() ?? null,
+        venue: eventData.venue,
+        description: eventData.description,
+        external_link: eventData.external_link,
+      });
+      const scheduledSendTime =
+        postSchedule === 'custom' && customScheduleTime
+          ? new Date(customScheduleTime).toISOString()
+          : null;
+      for (const channelId of selectedChannels) {
+        void createPostJob({ eventId, socialTargetId: channelId, postText, scheduledSendTime, mediaSourceUrls });
+      }
+    } catch (err) {
+      console.error('Social posting trigger failed:', err);
     }
   };
 
@@ -435,6 +494,9 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           shortUrl: buildEventShortUrl(parentShortCode),
           instanceCount: dates.length,
         });
+
+        // Trigger social posting for the parent event (fire-and-forget)
+        void triggerSocialPosting(parentData.id, data);
       } else {
         // ── Single (non-recurring) event ──
         const { data: inserted, error } = await supabase
@@ -486,6 +548,11 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
           capacity: data.capacity,
           shortUrl: buildEventShortUrl(singleShortCode),
         });
+
+        // Trigger social posting (fire-and-forget)
+        if (inserted?.id) {
+          void triggerSocialPosting(inserted.id, data);
+        }
       }
 
       form.reset();
@@ -982,6 +1049,79 @@ export function EventModal({ isOpen, onClose, onSuccess, event }: EventModalProp
               />
 
             </div>
+
+            {/* Social Media Publishing — create mode only */}
+            {!isEditing && (
+              <div className="border rounded-md p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Share2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Publish to Social Media</span>
+                  </div>
+                  <Switch
+                    checked={publishToSocial}
+                    onCheckedChange={setPublishToSocial}
+                    disabled={socialTargets.length === 0}
+                  />
+                </div>
+
+                {socialTargets.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    No social channels configured. Add channels in System Settings.
+                  </p>
+                )}
+
+                {publishToSocial && socialTargets.length > 0 && (
+                  <div className="space-y-3 pt-1">
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground font-medium">Channels</p>
+                      {socialTargets.map((target) => (
+                        <label key={target.id} className="flex items-center gap-2 cursor-pointer">
+                          <Checkbox
+                            checked={selectedChannels.includes(target.id)}
+                            onCheckedChange={(checked) =>
+                              setSelectedChannels(prev =>
+                                checked
+                                  ? [...prev, target.id]
+                                  : prev.filter(id => id !== target.id)
+                              )
+                            }
+                          />
+                          <span className="text-sm capitalize">{target.provider}</span>
+                          <span className="text-sm text-muted-foreground">— {target.profile_name}</span>
+                        </label>
+                      ))}
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground font-medium">Schedule</p>
+                      <RadioGroup
+                        value={postSchedule}
+                        onValueChange={(v) => setPostSchedule(v as PostScheduleMode)}
+                        className="flex gap-4"
+                      >
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="immediate" id="schedule-immediate" />
+                          <Label htmlFor="schedule-immediate" className="text-sm">Post immediately</Label>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <RadioGroupItem value="custom" id="schedule-custom" />
+                          <Label htmlFor="schedule-custom" className="text-sm">Custom time</Label>
+                        </div>
+                      </RadioGroup>
+                      {postSchedule === 'custom' && (
+                        <Input
+                          type="datetime-local"
+                          value={customScheduleTime}
+                          onChange={(e) => setCustomScheduleTime(e.target.value)}
+                          className="w-fit text-sm"
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex justify-end space-x-2 pt-4">
               <Button type="button" variant="outline" onClick={handleClose}>

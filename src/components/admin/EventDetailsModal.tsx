@@ -23,6 +23,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  Share2,
 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent as AlertContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader as AlertHeader, AlertDialogTitle as AlertTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { EventModal } from './EventModal';
@@ -30,6 +31,7 @@ import { useCurrency } from '@/context/CurrencyProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { buildEventShortUrl } from '@/lib/short-url';
+import { PostJobDetailsModal } from './PostJobDetailsModal';
 
 interface Event {
   id: string;
@@ -95,6 +97,7 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
   const [copied, setCopied] = useState(false);
   const [galleryMedia, setGalleryMedia] = useState<GalleryMediaRow[]>([]);
   const [isLoadingGallery, setIsLoadingGallery] = useState(false);
+  const [isSocialModalOpen, setIsSocialModalOpen] = useState(false);
 
   const { formatCurrency } = useCurrency();
   const { toast } = useToast();
@@ -132,7 +135,7 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
       setIsLoadingGallery(true);
       const { data, error } = await supabase
         .from('gallery_media')
-        .select('media_url, sort_order')
+        .select('media_url, mimetype, sort_order')
         .eq('event_id', event.id)
         .order('sort_order', { ascending: true });
 
@@ -419,11 +422,20 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
                     <div className="flex gap-2 overflow-x-auto pb-2 snap-x">
                       {galleryMedia.map((media, i) => (
                         <div key={i} className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md border bg-muted snap-start">
-                          <img
-                            src={media.media_url}
-                            alt={`Gallery image ${i + 1}`}
-                            className="h-full w-full object-cover"
-                          />
+                          {media.mimetype?.startsWith('video/') ? (
+                            <video
+                              src={media.media_url}
+                              className="h-full w-full object-cover"
+                              muted
+                              playsInline
+                            />
+                          ) : (
+                            <img
+                              src={media.media_url}
+                              alt={`Gallery image ${i + 1}`}
+                              className="h-full w-full object-cover"
+                            />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -549,6 +561,14 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
                   View Registrations
                 </Button>
               )}
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => setIsSocialModalOpen(true)}
+              >
+                <Share2 className="h-4 w-4" />
+                Social Posts
+              </Button>
               {onCancel && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -578,6 +598,13 @@ export function EventDetailsModal({ isOpen, onClose, event, onSuccess, onViewReg
         onClose={() => setIsEditModalOpen(false)}
         onSuccess={handleEditSuccess}
         event={event}
+      />
+
+      <PostJobDetailsModal
+        isOpen={isSocialModalOpen}
+        onClose={() => setIsSocialModalOpen(false)}
+        eventId={event?.id ?? null}
+        eventTitle={event?.title ?? ''}
       />
     </>
   );

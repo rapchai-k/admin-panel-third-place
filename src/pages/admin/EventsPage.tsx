@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DataTable, Column } from '@/components/admin/DataTable';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { EventModal } from '@/components/admin/EventModal';
 import { EventRegistrationsModal } from '@/components/admin/EventRegistrationsModal';
 import { EventDetailsModal } from '@/components/admin/EventDetailsModal';
+import { PostJobDetailsModal } from '@/components/admin/PostJobDetailsModal';
 import { useCurrency } from '@/context/CurrencyProvider';
 
 interface Event {
@@ -43,6 +44,7 @@ interface Event {
   } | null;
   registration_count?: number;
   short_code?: string;
+  post_jobs?: Array<{ id: string; status: string }>;
 }
 
 // Helpers for null-safe strings and initials
@@ -61,7 +63,18 @@ const getInitials = (name?: string): string => {
 };
 
 
-const createColumns = (formatCurrency: (value: number, code?: string) => string): Column<Event>[] => [
+/** Derive a single summary status from all post_jobs on an event. */
+export function summarizeSocialStatus(jobs?: Array<{ id: string; status: string }>) {
+  if (!jobs || jobs.length === 0) return 'none';
+  if (jobs.some(j => j.status === 'failed')) return 'failed';
+  if (jobs.every(j => j.status === 'scheduled')) return 'scheduled';
+  return 'pending';
+}
+
+const createColumns = (
+  formatCurrency: (value: number, code?: string) => string,
+  onSocialClick: (event: Event) => void,
+): Column<Event>[] => [
   {
     key: 'title',
     header: 'Event',
@@ -205,6 +218,33 @@ const createColumns = (formatCurrency: (value: number, code?: string) => string)
     },
   },
   {
+    key: 'post_jobs',
+    header: 'Social',
+    render: (_value, row) => {
+      const status = summarizeSocialStatus(row.post_jobs);
+      if (status === 'none') {
+        return (
+          <span className="text-xs text-muted-foreground cursor-default">—</span>
+        );
+      }
+      const badgeProps: { variant: 'destructive' | 'default' | 'secondary' | 'outline'; label: string } =
+        status === 'failed'
+          ? { variant: 'destructive', label: 'Failed' }
+          : status === 'scheduled'
+          ? { variant: 'default', label: 'Scheduled' }
+          : { variant: 'secondary', label: 'Pending' };
+      return (
+        <Badge
+          variant={badgeProps.variant}
+          className="cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); onSocialClick(row); }}
+        >
+          {badgeProps.label}
+        </Badge>
+      );
+    },
+  },
+  {
     key: 'created_at',
     header: 'Created',
     sortable: true,
@@ -219,10 +259,15 @@ export default function EventsPage() {
   const [selectedEvent, setSelectedEvent] = useState<Event | undefined>();
   const [isRegistrationsModalOpen, setIsRegistrationsModalOpen] = useState(false);
   const [isEventDetailsModalOpen, setIsEventDetailsModalOpen] = useState(false);
+  const [socialDetailsEvent, setSocialDetailsEvent] = useState<Event | null>(null);
   const { toast } = useToast();
   const { formatCurrency } = useCurrency();
 
-  const columns = useMemo(() => createColumns(formatCurrency), [formatCurrency]);
+  const handleSocialClick = useCallback((event: Event) => {
+    setSocialDetailsEvent(event);
+  }, []);
+
+  const columns = useMemo(() => createColumns(formatCurrency, handleSocialClick), [formatCurrency, handleSocialClick]);
 
   useEffect(() => {
     loadEvents();
@@ -239,7 +284,8 @@ export default function EventsPage() {
           gallery_media(media_url, sort_order),
           community:communities(name, city),
           host:users(name, photo_url),
-          registration_count:event_registrations(count)
+          registration_count:event_registrations(count),
+          post_jobs(id, status)
         `)
         .order('date_time', { ascending: false });
 
@@ -376,6 +422,14 @@ export default function EventsPage() {
         onSuccess={loadEvents}
         onViewRegistrations={() => setIsRegistrationsModalOpen(true)}
         onCancel={() => selectedEvent && handleCancel(selectedEvent)}
+      />
+
+      <PostJobDetailsModal
+        isOpen={!!socialDetailsEvent}
+        onClose={() => setSocialDetailsEvent(null)}
+        eventId={socialDetailsEvent?.id ?? null}
+        eventTitle={socialDetailsEvent?.title ?? ''}
+        onRetrySuccess={loadEvents}
       />
     </div>
   );

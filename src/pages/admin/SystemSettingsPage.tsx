@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,14 +15,76 @@ import {
   Database,
   Globe,
   Save,
-  RotateCcw
+  RotateCcw,
+  Share2,
+  Link,
+  Unlink,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { openHootsuiteAuthPopup } from '@/lib/hootsuite-oauth';
+import type { HootsuiteToken } from '@/lib/social-posting.types';
 
 
 export default function SystemSettingsPage() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+
+  // ── Hootsuite connection state ──────────────────────────────────────────
+  const [hootsuiteToken, setHootsuiteToken] = useState<HootsuiteToken | null>(null);
+  const [hootsuiteLoading, setHootsuiteLoading] = useState(true);
+  const [hootsuiteDisconnecting, setHootsuiteDisconnecting] = useState(false);
+
+  const loadHootsuiteToken = async () => {
+    setHootsuiteLoading(true);
+    const { data } = await supabase
+      .from('hootsuite_tokens')
+      .select('*')
+      .limit(1)
+      .single();
+    setHootsuiteToken((data as HootsuiteToken | null) ?? null);
+    setHootsuiteLoading(false);
+  };
+
+  // Handle OAuth redirect params (2A.4) — runs once on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('hootsuite_connected');
+    const error = params.get('hootsuite_error');
+
+    if (connected === 'true') {
+      toast({ title: 'Hootsuite Connected', description: 'Your Hootsuite account has been connected successfully.' });
+      // Remove query params without reloading
+      window.history.replaceState({}, '', window.location.pathname);
+      loadHootsuiteToken();
+    } else if (error) {
+      toast({ title: 'Hootsuite Connection Failed', description: decodeURIComponent(error), variant: 'destructive' });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else {
+      loadHootsuiteToken();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleConnectHootsuite = () => {
+    openHootsuiteAuthPopup();
+    // After the popup completes, the admin is redirected back to this page
+    // with ?hootsuite_connected=true — handled in the useEffect above.
+  };
+
+  const handleDisconnectHootsuite = async () => {
+    if (!hootsuiteToken) return;
+    setHootsuiteDisconnecting(true);
+    const { error } = await supabase.from('hootsuite_tokens').delete().eq('id', hootsuiteToken.id);
+    if (error) {
+      toast({ title: 'Error', description: 'Failed to disconnect Hootsuite.', variant: 'destructive' });
+    } else {
+      setHootsuiteToken(null);
+      toast({ title: 'Disconnected', description: 'Hootsuite account has been disconnected.' });
+    }
+    setHootsuiteDisconnecting(false);
+  };
 
   // General Settings
   const [platformName, setPlatformName] = useState('Community Platform');
@@ -266,6 +328,59 @@ export default function SystemSettingsPage() {
               />
             </div>
           </div>
+        </Card>
+        {/* Social Media Integration */}
+        <Card className="p-6 lg:col-span-2">
+          <div className="flex items-center gap-2 mb-4">
+            <Share2 className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Social Media Integration</h2>
+          </div>
+
+          {hootsuiteLoading ? (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Checking connection status…</span>
+            </div>
+          ) : hootsuiteToken ? (
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge className="bg-green-500 text-white">Connected</Badge>
+                  <span className="text-sm font-medium">Hootsuite</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Token expires: {new Date(hootsuiteToken.expires_at).toLocaleString()}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDisconnectHootsuite}
+                disabled={hootsuiteDisconnecting}
+              >
+                {hootsuiteDisconnecting
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  : <Unlink className="h-4 w-4 mr-2" />}
+                Disconnect
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <Badge variant="outline" className="text-destructive border-destructive">Not Connected</Badge>
+                  <span className="text-sm font-medium">Hootsuite</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Connect your Hootsuite account to enable social media posting from event creation.
+                </p>
+              </div>
+              <Button size="sm" onClick={handleConnectHootsuite}>
+                <Link className="h-4 w-4 mr-2" />
+                Connect Hootsuite
+              </Button>
+            </div>
+          )}
         </Card>
       </div>
 

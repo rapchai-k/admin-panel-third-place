@@ -12,6 +12,7 @@ export type GalleryDraftItem =
       id: string;
       previewUrl: string;
       name: string;
+      mimetype: string;
     }
   | {
       key: string;
@@ -19,7 +20,11 @@ export type GalleryDraftItem =
       file: File;
       previewUrl: string;
       name: string;
+      mimetype: string;
     };
+
+export const isVideoMimetype = (mimetype: string): boolean =>
+  mimetype.startsWith('video/');
 
 export interface GalleryDraftState {
   items: GalleryDraftItem[];
